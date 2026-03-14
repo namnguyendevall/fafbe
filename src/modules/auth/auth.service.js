@@ -33,23 +33,22 @@ exports.register = async (email, password, role) => {
     await pool.query(sql.insertOtp, [email, otpHash, expires]);
     console.log(`[register] OTP record inserted`);
 
-    console.log(`[register] Attempting to send mail to ${email}`);
-    let mailSent = true;
-    try {
-      await mailer.sendMail({
-        to: email,
-        subject: 'FAF OTP Verification',
-        html: `<h3>Your OTP: ${otp}</h3>`,
-      });
-      console.log(`[register] Mail sent successfully`);
-    } catch (mailErr) {
-      console.error(`[register] Mailer failed but user was created:`, mailErr.message);
-      mailSent = false;
-    }
+    console.log(`[register] Attempting to send mail in background to ${email}`);
+    // DO NOT await this call to prevent registration hang
+    mailer.sendMail({
+      to: email,
+      subject: 'FAF OTP Verification',
+      html: `<h3>Your OTP: ${otp}</h3>`,
+    }).then(() => {
+      console.log(`[register] Background mail sent successfully`);
+    }).catch(mailErr => {
+      console.error(`[register] Background mailer failed:`, mailErr.message);
+    });
 
-    return { user: userRes.rows[0], mailSent };
+    // Return immediately after DB success
+    return { user: userRes.rows[0], mailSent: true };
   } catch (err) {
-    console.error(`[register] Error caught:`, err);
+    console.error(`[register] Error caught into registration:`, err);
     throw err;
   }
 };
