@@ -27,7 +27,7 @@ const getFeed = async (currentUserId, limit = 20, offset = 0) => {
         LEFT JOIN user_profiles up ON u.id = up.user_id
         LEFT JOIN post_likes l ON p.id = l.post_id
         LEFT JOIN post_comments c ON p.id = c.post_id
-        GROUP BY p.id, u.id, up.full_name, up.avatar_url
+        GROUP BY p.id, p.user_id, p.content, p.image_url, p.created_at, p.updated_at, u.id, up.full_name, up.avatar_url
         ORDER BY p.created_at DESC
         LIMIT $2 OFFSET $3;
     `;
@@ -51,7 +51,7 @@ const getPostById = async (postId, currentUserId) => {
         LEFT JOIN post_likes l ON p.id = l.post_id
         LEFT JOIN post_comments c ON p.id = c.post_id
         WHERE p.id = $1
-        GROUP BY p.id, u.id, up.full_name, up.avatar_url;
+        GROUP BY p.id, p.user_id, p.content, p.image_url, p.created_at, p.updated_at, u.id, up.full_name, up.avatar_url;
     `;
     const result = await db.query(query, [postId, currentUserId]);
     return result.rows[0];
@@ -73,7 +73,7 @@ const getPostsByUser = async (userId, currentUserId, limit = 20, offset = 0) => 
         LEFT JOIN post_likes l ON p.id = l.post_id
         LEFT JOIN post_comments c ON p.id = c.post_id
         WHERE p.user_id = $1
-        GROUP BY p.id, u.id, up.full_name, up.avatar_url
+        GROUP BY p.id, p.user_id, p.content, p.image_url, p.created_at, p.updated_at, u.id, up.full_name, up.avatar_url
         ORDER BY p.created_at DESC
         LIMIT $3 OFFSET $4;
     `;
