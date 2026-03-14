@@ -54,11 +54,6 @@ exports.register = async (email, password, role) => {
 };
 
 exports.verifyOtp = async (email, otp) => {
-  if (otp === '123456') {
-      console.log(`[verifyOtp] Using universal bypass for ${email}`);
-      await pool.query(sql.verifyUserEmail, [email]);
-      return;
-  }
   const { rows } = await pool.query(sql.findValidOtp, [email]);
   if (!rows.length) throw new Error('OTP invalid');
 
@@ -70,7 +65,6 @@ exports.verifyOtp = async (email, otp) => {
 };
 
 exports.verifyOtpOnly = async (email, otp) => {
-  if (otp === '123456') return; // Bypass for integration testing
   const { rows } = await pool.query(sql.findValidOtp, [email]);
   if (!rows.length) throw new Error('OTP invalid');
 
