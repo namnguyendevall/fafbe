@@ -1,18 +1,38 @@
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.resend.com",
-  port: 587,
-  secure: false, // TLS
-  auth: {
-    user: "resend",
-    pass: process.env.RESEND_API_KEY || process.env.MAIL_PASS,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 20000,
-});
+const mailer = {
+  sendMail: async ({ to, subject, html }) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.error('[Mailer] ERROR: RESEND_API_KEY is missing in environment variables.');
+      return;
+    }
 
-console.log('[Mailer Config] Host: resend/gmail, User:', (process.env.RESEND_API_KEY || process.env.MAIL_USER) ? 'SET' : 'MISSING');
+    try {
+      // Note: By default Resend only sends from 'onboarding@resend.dev' to the account owner
+      // Unless you have verified your own domain.
+      const response = await axios.post('https://api.resend.com/emails', {
+        from: 'FAF Account <onboarding@resend.dev>',
+        to: to,
+        subject: subject,
+        html: html,
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      console.log('[Mailer] SUCCESS: Email sent via Resend HTTPS API. ID:', response.data.id);
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message;
+      console.error('[Mailer] FAILED via HTTPS:', errorMsg);
+      if (err.response?.status === 401) {
+        console.error('[Mailer] HINT: Your RESEND_API_KEY might be invalid.');
+      }
+    }
+  }
+};
 
-module.exports = transporter;
+console.log('[Mailer Config] Method: Resend HTTPS API, API_KEY:', process.env.RESEND_API_KEY ? 'SET' : 'MISSING');
+
+module.exports = mailer;
