@@ -63,12 +63,25 @@ exports.sendOtp = async (email, subject) => {
   const otpHash = await bcrypt.hash(otp, 10);
   const expires = new Date(Date.now() + 5 * 60 * 1000);
 
-  await pool.query(sql.insertOtp, [email, otpHash, expires]);
-  await mailer.sendMail({
-    to: email,
-    subject: 'FAF OTP Verification',
-    html: `<h3>Your OTP: ${otp}</h3>`,
-  });
+  try {
+    await pool.query(sql.insertOtp, [email, otpHash, expires]);
+    console.log(`[sendOtp] OTP inserted into DB for ${email}`);
+  } catch (dbErr) {
+    console.error("[sendOtp] Database Error:", dbErr);
+    throw dbErr;
+  }
+
+  try {
+    await mailer.sendMail({
+      to: email,
+      subject: subject || 'FAF OTP Verification',
+      html: `<h3>Your OTP: ${otp}</h3>`,
+    });
+    console.log(`[sendOtp] Email sent to ${email}`);
+  } catch (mailErr) {
+    console.error("[sendOtp] Mailer Error:", mailErr);
+    throw new Error(`MAIL_SEND_ERROR: ${mailErr.message}`);
+  }
 };
 
 // =======================

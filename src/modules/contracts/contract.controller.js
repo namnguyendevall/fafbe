@@ -23,11 +23,20 @@ exports.requestSignOtp = async (req, res) => {
         const user = await userService.getMyProfile(req.user.id);
         if (!user) return res.status(404).json({ message: "User not found" });
         
+        console.log(`[requestSignOtp] Sending OTP to ${user.email} for user ${req.user.id}`);
         await authService.sendOtp(user.email, 'FAF - Xác nhận ký hợp đồng');
         return res.json({ message: "OTP sent to your email" });
     } catch (e) {
-        console.error(e);
-        return res.status(500).json({ message: "Internal server error" });
+        console.error("[requestSignOtp] Error:", {
+            message: e.message,
+            code: e.code,
+            detail: e.detail,
+            stack: e.stack
+        });
+        return res.status(500).json({ 
+            message: "Gửi mã OTP thất bại. Vui lòng thử lại.",
+            error: e.message 
+        });
     }
 };
 
