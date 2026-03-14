@@ -70,8 +70,8 @@ exports.lockBudget = async (client, { userId, amount, referenceId, referenceType
     const wallet = await exports.getWallet(client, userId);
     console.log(`[lockBudget] Fetched wallet for user ${userId}:`, wallet);
     
-    if (!wallet || wallet.id === null) {
-        console.error(`[lockBudget] CRITICAL: Wallet ID is NULL for user ${userId}. Wallet data:`, wallet);
+    if (!wallet || !wallet.id) {
+        console.error(`[lockBudget] CRITICAL: Wallet or Wallet ID is missing for user ${userId}. Wallet data:`, wallet);
         throw new Error("WALLET_ID_MISSING");
     }
 
