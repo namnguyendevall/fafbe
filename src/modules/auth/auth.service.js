@@ -13,27 +13,45 @@ constgenOtp = () => {
 };
 
 exports.register = async (email, password, role) => {
+  console.log(`>>> [register] Starting for ${email}`);
   const hashedPassword = await bcrypt.hash(password, 10);
+  console.log(`[register] Bcrypt hash generated`);
 
-  const userRes = await pool.query(sql.createUser, [
-    email,
-    hashedPassword,
-    role
-  ]);
+  try {
+    const userRes = await pool.query(sql.createUser, [
+      email,
+      hashedPassword,
+      role
+    ]);
+    console.log(`[register] User record inserted:`, userRes.rows[0]?.id);
 
-  const otp = generateOtp();
-  const otpHash = await bcrypt.hash(otp, 10);
-  const expires = new Date(Date.now() + 5 * 60 * 1000);
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const expires = new Date(Date.now() + 5 * 60 * 1000);
 
-  await pool.query(sql.insertOtp, [email, otpHash, expires]);
+    console.log(`[register] Attempting to insert OTP`);
+    await pool.query(sql.insertOtp, [email, otpHash, expires]);
+    console.log(`[register] OTP record inserted`);
 
-  await mailer.sendMail({
-    to: email,
-    subject: 'FAF OTP Verification',
-    html: `<h3>Your OTP: ${otp}</h3>`,
-  });
+    console.log(`[register] Attempting to send mail to ${email}`);
+    try {
+      await mailer.sendMail({
+        to: email,
+        subject: 'FAF OTP Verification',
+        html: `<h3>Your OTP: ${otp}</h3>`,
+      });
+      console.log(`[register] Mail sent successfully`);
+    } catch (mailErr) {
+      console.error(`[register] Mailer failed but user was created:`, mailErr.message);
+      // We don't throw here so the response can finish, 
+      // but we might want to return a hint that mail failed
+    }
 
-  return userRes.rows[0];
+    return userRes.rows[0];
+  } catch (err) {
+    console.error(`[register] Error caught:`, err);
+    throw err;
+  }
 };
 
 exports.verifyOtp = async (email, otp) => {
