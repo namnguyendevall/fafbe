@@ -60,10 +60,21 @@ exports.refundLockedFunds = async (client, { userId, amount, referenceId, refere
  * Lock funds from user balance into locked_points
  */
 exports.lockBudget = async (client, { userId, amount, referenceId, referenceType }) => {
+    console.log(`[lockBudget] Locking ${amount} for user ${userId}, ref: ${referenceId}`);
     const updateRes = await client.query(sql.lockFunds, [userId, amount]);
-    if (updateRes.rowCount === 0) throw new Error("INSUFFICIENT_BALANCE");
+    if (updateRes.rowCount === 0) {
+        console.error(`[lockBudget] Insufficient balance for user ${userId}`);
+        throw new Error("INSUFFICIENT_BALANCE");
+    }
 
     const wallet = await exports.getWallet(client, userId);
+    console.log(`[lockBudget] Fetched wallet for user ${userId}:`, wallet);
+    
+    if (!wallet || wallet.id === null) {
+        console.error(`[lockBudget] CRITICAL: Wallet ID is NULL for user ${userId}. Wallet data:`, wallet);
+        throw new Error("WALLET_ID_MISSING");
+    }
+
     await client.query(sql.createTransaction, [
         wallet.id, 'LOCK', amount, 'SUCCESS', referenceType, referenceId
     ]);
