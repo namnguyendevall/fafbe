@@ -87,17 +87,17 @@ exports.sendOtp = async (email, subject) => {
     throw dbErr;
   }
 
-  try {
-    await mailer.sendMail({
-      to: email,
-      subject: subject || 'FAF OTP Verification',
-      html: `<h3>Your OTP: ${otp}</h3>`,
-    });
-    console.log(`[sendOtp] Email sent to ${email}`);
-  } catch (mailErr) {
-    console.error("[sendOtp] Mailer Error:", mailErr);
-    throw new Error(`MAIL_SEND_ERROR: ${mailErr.message}`);
-  }
+  console.log(`[sendOtp] Attempting to send mail in background to ${email}`);
+  // DO NOT await this call to prevent registration/resend hang
+  mailer.sendMail({
+    to: email,
+    subject: subject || 'FAF OTP Verification',
+    html: `<h3>Your OTP: ${otp}</h3>`,
+  }).then(() => {
+    console.log(`[sendOtp] Background mail sent successfully to ${email}`);
+  }).catch(mailErr => {
+    console.error(`[sendOtp] Background mailer failed for ${email}:`, mailErr.message);
+  });
 };
 
 // =======================
