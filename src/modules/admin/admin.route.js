@@ -14,7 +14,7 @@ router.put('/jobs/:id/approve', auth, isManagerOrAdmin, controller.approveJob);
 router.put('/jobs/:id/reject', auth, isManagerOrAdmin, controller.rejectJob);
 router.get('/stats', auth, isManagerOrAdmin, controller.getDashboardStats);
 router.get('/financials', auth, isManagerOrAdmin, controller.getFinancialOverview);
-router.get('/users', auth, isAdmin, controller.listAllUsers);
+router.get('/users', auth, isManagerOrAdmin, controller.listAllUsers);
 router.patch('/users/:id/role', auth, isAdmin, controller.updateUserRoleHandler);
 router.get('/transactions', auth, isManagerOrAdmin, controller.getTransactions);
 router.get('/management/jobs', auth, isManagerOrAdmin, controller.getJobsManagement);
