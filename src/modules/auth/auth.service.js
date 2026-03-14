@@ -27,10 +27,9 @@ exports.register = async (email, password, role) => {
 
     const otp = generateOtp();
     const otpHash = await bcrypt.hash(otp, 10);
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
 
     console.log(`[register] Attempting to insert OTP`);
-    await pool.query(sql.insertOtp, [email, otpHash, expires]);
+    await pool.query(sql.insertOtp, [email, otpHash]);
     console.log(`[register] OTP record inserted`);
 
     console.log(`[register] OTP for ${email} is: ${otp}`);
@@ -95,10 +94,9 @@ exports.verifyOtpOnly = async (email, otp) => {
 exports.sendOtp = async (email, subject) => {
   const otp = generateOtp();
   const otpHash = await bcrypt.hash(otp, 10);
-  const expires = new Date(Date.now() + 5 * 60 * 1000);
 
   try {
-    await pool.query(sql.insertOtp, [email, otpHash, expires]);
+    await pool.query(sql.insertOtp, [email, otpHash]);
     console.log(`[sendOtp] OTP inserted into DB for ${email}`);
   } catch (dbErr) {
     console.error("[sendOtp] Database Error:", dbErr);

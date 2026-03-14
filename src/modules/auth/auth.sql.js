@@ -9,7 +9,7 @@ module.exports = {
   `,
   insertOtp: `
     INSERT INTO otps (email, otp_hash, expires_at)
-    VALUES ($1, $2, $3)
+    VALUES ($1, $2, NOW() + INTERVAL '15 minutes')
   `,
   findValidOtp: `
     SELECT * FROM otps
