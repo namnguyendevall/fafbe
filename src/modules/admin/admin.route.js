@@ -2,124 +2,37 @@ const express = require('express');
 const router = express.Router();
 const controller = require('./admin.controller');
 const auth = require('../../middlewares/auth.middleware');
+const checkRole = require('../../middlewares/role.middleware');
 
-// Middleware to check if user is admin is NOT yet implemented in auth.middleware, 
-// so we'll do a simple check here or update auth middleware.
-// For now let's assume we check req.user.role in controller or here.
+const isManagerOrAdmin = checkRole(['admin', 'manager']);
+const isAdmin = checkRole(['admin']);
 
-const isAdmin = (req, res, next) => {
-    if (req.user && req.user.role === 'ADMIN') {
-        next();
-    } else {
-        res.status(403).json({ message: "Admin access required" });
-    }
-};
-
-
-/**
- * @swagger
- * tags:
- *   name: Admin
- *   description: Administrative actions
- */
-
-/**
- * @swagger
- * /api/admin/jobs/pending:
- *   get:
- *     summary: List pending jobs
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of pending jobs
- */
-router.get('/jobs/pending', auth, isAdmin, controller.getPendingJobs);
-
-/**
- * @swagger
- * /api/admin/jobs/{id}/approve:
- *   put:
- *     summary: Approve a job
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Job approved
- */
-router.put('/jobs/:id/approve', auth, isAdmin, controller.approveJob);
-
-/**
- * @swagger
- * /api/admin/jobs/{id}/reject:
- *   put:
- *     summary: Reject a job
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *     responses:
- *       200:
- *         description: Job rejected
- */
-router.put('/jobs/:id/reject', auth, isAdmin, controller.rejectJob);
-
-/**
- * @swagger
- * /api/admin/stats:
- *   get:
- *     summary: Get dashboard statistics
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- */
-router.get('/stats', auth, isAdmin, controller.getDashboardStats);
-
-/**
- * @swagger
- * /api/admin/financials:
- *   get:
- *     summary: Get financial overview
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- */
-router.get('/financials', auth, isAdmin, controller.getFinancialOverview);
-
-/**
- * @swagger
- * /api/admin/users:
- *   get:
- *     summary: List all users with details
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- */
+// Existing routes with improved protection
+router.get('/jobs/pending', auth, isManagerOrAdmin, controller.getPendingJobs);
+router.get('/jobs/all', auth, isManagerOrAdmin, controller.getAllJobs);
+router.put('/jobs/:id/approve', auth, isManagerOrAdmin, controller.approveJob);
+router.put('/jobs/:id/reject', auth, isManagerOrAdmin, controller.rejectJob);
+router.get('/stats', auth, isManagerOrAdmin, controller.getDashboardStats);
+router.get('/financials', auth, isManagerOrAdmin, controller.getFinancialOverview);
 router.get('/users', auth, isAdmin, controller.listAllUsers);
-
-/**
- * @swagger
- * /api/admin/users/{id}/role:
- *   patch:
- *     summary: Update user role (Promote to Manager)
- *     tags: [Admin]
- *     security:
- *       - bearerAuth: []
- */
 router.patch('/users/:id/role', auth, isAdmin, controller.updateUserRoleHandler);
+router.get('/transactions', auth, isManagerOrAdmin, controller.getTransactions);
+router.get('/management/jobs', auth, isManagerOrAdmin, controller.getJobsManagement);
+
+// New Dashboard & Stats Routes
+router.get('/stats/jobs', auth, isManagerOrAdmin, controller.getJobStats);
+
+// Manager Management (Admin Only)
+router.post('/managers', auth, isAdmin, controller.createManager);
+
+// Category Proposals
+router.get('/categories/proposals', auth, isManagerOrAdmin, controller.listCategoryProposals);
+router.put('/categories/proposals/:id/approve', auth, isAdmin, controller.approveCategoryProposal);
+router.put('/categories/proposals/:id/reject', auth, isAdmin, controller.rejectCategoryProposal);
+
+// Admin Notifications
+router.get('/notifications', auth, isAdmin, controller.listAdminNotifications);
+router.patch('/notifications/:id/read', auth, isAdmin, controller.markNotificationRead);
 
 module.exports = router;
 

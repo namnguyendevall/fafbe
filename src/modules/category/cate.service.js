@@ -23,6 +23,16 @@ exports.getCategoryById = async (categoryId) => {
   return rows[0];
 };
 
+exports.proposeCategory = async ({ userId, name, description }) => {
+  const { rows } = await pool.query(`
+    INSERT INTO category_proposals (user_id, name, description, status, created_at)
+    VALUES ($1, $2, $3, 'PENDING', NOW())
+    RETURNING *
+  `, [userId, name, description]);
+
+  return rows[0];
+};
+
 exports.createCategory = async ({ name, slug, description }) => {
   const { rows } = await pool.query(`
     INSERT INTO job_categories (name, slug, description, is_active, created_at)

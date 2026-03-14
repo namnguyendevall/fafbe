@@ -60,8 +60,38 @@ exports.createReview = async ({ contractId, reviewerId, rating, comment, skillRa
                 // Insert into review_skill_ratings
                 await client.query(sql.addSkillRating, [review.id, skill_id, skillRating]);
 
-                // Increment user_skills.skill_points
-                await client.query(sql.updateUserSkillPoints, [revieweeId, skill_id, skillRating]);
+                // Calculate points delta based on new rules:
+                // 1 star = -1, 2 star = 0, 3 star = +1, 4 star = +2, 5 star = +3
+                let pointsDelta = 0;
+                switch (Number(skillRating)) {
+                    case 1: pointsDelta = -1; break;
+                    case 2: pointsDelta = 0; break;
+                    case 3: pointsDelta = 1; break;
+                    case 4: pointsDelta = 2; break;
+                    case 5: pointsDelta = 3; break;
+                }
+
+                if (pointsDelta !== 0) {
+                    // Check if worker already has the skill
+                    const existingSkillRes = await client.query('SELECT skill_points FROM user_skills WHERE user_id = $1 AND skill_id = $2', [revieweeId, skill_id]);
+                    
+                    if (existingSkillRes.rows.length > 0) {
+                        // Worker has skill, update points
+                        const currentPoints = Number(existingSkillRes.rows[0].skill_points);
+                        const newPoints = currentPoints + pointsDelta;
+                        
+                        if (newPoints <= 0) {
+                            // "nếu điểm bằng không thì xóa skill đó ra"
+                            await client.query('DELETE FROM user_skills WHERE user_id = $1 AND skill_id = $2', [revieweeId, skill_id]);
+                        } else {
+                            await client.query('UPDATE user_skills SET skill_points = LEAST($1, 1000) WHERE user_id = $2 AND skill_id = $3', [newPoints, revieweeId, skill_id]);
+                        }
+                    } else if (pointsDelta > 0) {
+                        // "nếu skill chưa có thì đánh giá từ 3 trở lên sẽ được cộng 1"
+                        // Since pointsDelta > 0 only when rating >= 3, and the spec says "+1" for new skills:
+                        await client.query('INSERT INTO user_skills (user_id, skill_id, skill_points) VALUES ($1, $2, 1)', [revieweeId, skill_id]);
+                    }
+                }
             }
         }
         

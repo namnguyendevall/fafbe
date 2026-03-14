@@ -28,6 +28,7 @@ async function createJobWithContractAndCheckpoints({
   startDate,
   endDate,
   deadline,
+  resourceUrls = [],
 }) {
   console.log("👉 skills nhận được:", skills);
   console.log("checkpont", checkpoints);
@@ -59,12 +60,12 @@ async function createJobWithContractAndCheckpoints({
       INSERT INTO jobs (
         client_id, category_id, title, description,
         job_type, budget, status, moderation_status, moderation_result, created_at,
-        deadline
+        deadline, resource_urls
       )
-      VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, NOW(), $9)
+      VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, NOW(), $9, $10)
       RETURNING *
       `,
-      [clientId, categoryId, title, description || null, jobType, budget, moderationStatus, JSON.stringify(moderationResult), deadline || null],
+      [clientId, categoryId, title, description || null, jobType, budget, moderationStatus, JSON.stringify(moderationResult), deadline || null, JSON.stringify(resourceUrls)],
     );
 
     const job = jobRows[0];
@@ -106,12 +107,12 @@ async function createJobWithContractAndCheckpoints({
         `
         INSERT INTO checkpoints (
           contract_id, title, description,
-          amount, due_date, status, created_at
+          amount, due_date, duration_days, status, created_at
         )
-        VALUES ($1, $2, $3, $4, $5, 'PENDING', NOW())
+        VALUES ($1, $2, $3, $4, null, $5, 'PENDING', NOW())
         RETURNING *
         `,
-        [contract.id, cp.title, cp.description || null, cp.amount, cp.due_date || null],
+        [contract.id, cp.title, cp.description || null, cp.amount, cp.duration_days || 7],
       );
       createdCheckpoints.push(rows[0]);
     }
@@ -182,7 +183,7 @@ async function listJobs({ page = 1, limit = 10, categoryId, clientId, status, wo
 /**
  * GET JOB DETAIL
  */
-async function getJobById(jobId) {
+async function getJobById(jobId, requestingUser = null) {
   const { rows } = await pool.query(
     `
     SELECT j.*,
@@ -208,11 +209,14 @@ async function getJobById(jobId) {
                 'description', cp.description,
                 'amount', cp.amount,
                 'status', cp.status,
-                'deadline', cp.due_date
+                'deadline', cp.due_date,
+                'submission_url', cp.submission_url,
+                'submission_notes', cp.submission_notes
               ) ORDER BY cp.created_at ASC
             ), '[]') FROM checkpoints cp 
             JOIN contracts ct ON cp.contract_id = ct.id 
             WHERE ct.job_id = j.id) AS checkpoints,
+           (SELECT d.id FROM disputes d JOIN contracts ct_dis ON d.contract_id = ct_dis.id WHERE ct_dis.job_id = j.id AND d.status = 'OPEN' LIMIT 1) AS dispute_id,
            COALESCE(
              json_agg(
                json_build_object(
@@ -235,7 +239,27 @@ async function getJobById(jobId) {
     [jobId],
   );
 
-  return rows[0];
+  const job = rows[0];
+  if (!job) return null;
+
+  // PRIVACY FILTER: Managers/Admins can ONLY see submission_url if there is an active dispute
+  if (requestingUser && ['manager', 'admin'].includes(requestingUser.role?.toLowerCase())) {
+    const { rows: disputeRes } = await pool.query(
+        "SELECT 1 FROM disputes d JOIN contracts c ON d.contract_id = c.id WHERE c.job_id = $1 AND d.status = 'OPEN'",
+        [jobId]
+    );
+    const hasActiveDispute = disputeRes.length > 0;
+
+    if (!hasActiveDispute) {
+        job.checkpoints = job.checkpoints.map(cp => ({
+            ...cp,
+            submission_url: null,
+            submission_notes: "[HIDDEN_PRIVACY_PROTOCOL_ACTIVE]"
+        }));
+    }
+  }
+
+  return job;
 }
 
 
@@ -243,19 +267,32 @@ async function getJobById(jobId) {
  * UPDATE JOB
  */
 async function updateJob(jobId, data) {
-  const { title, description, categoryId, skills = [] } = data;
+  const { title, description, categoryId, skills = [], resourceUrls } = data;
+
+  const sets = [
+    'title = $1',
+    'description = $2',
+    'category_id = $3',
+    'updated_at = NOW()'
+  ];
+  const params = [title, description, categoryId];
+
+  if (resourceUrls) {
+    params.push(JSON.stringify(resourceUrls));
+    sets.push(`resource_urls = $${params.length}`);
+  }
+
+  params.push(jobId);
+  const whereClause = `WHERE id = $${params.length}`;
 
   const { rows } = await pool.query(
     `
     UPDATE jobs
-    SET title = $1,
-        description = $2,
-        category_id = $3,
-        updated_at = NOW()
-    WHERE id = $4
+    SET ${sets.join(', ')}
+    ${whereClause}
     RETURNING *
     `,
-    [title, description, categoryId, jobId],
+    params
   );
 
   // reset skills
@@ -386,10 +423,13 @@ async function reviewJob(jobId, { status, adminComment, adminId }) {
 
 
     await client.query('COMMIT');
-    return updatedJob;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
+    return job;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    if (error.message === "INSUFFICIENT_BALANCE") {
+        throw new Error("WALLET_INSUFFICIENT_BALANCE");
+    }
+    throw error;
   } finally {
     client.release();
   }

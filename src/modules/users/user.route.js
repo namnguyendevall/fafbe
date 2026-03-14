@@ -101,7 +101,7 @@ r.get('/:id', auth, c.getPublicProfile);
  *         description: List of users
  */
 // admin only
-r.get('/', auth, role(['ADMIN']), c.listUsers);
+r.get('/', auth, role(['admin']), c.listUsers);
 
 /**
  * @swagger
@@ -150,6 +150,37 @@ r.get('/profile/portfolio/:userId', auth, c.getPortfolio);
  *         description: Portfolio updated
  */
 r.put('/profile/portfolio', auth, c.updatePortfolio);
+
+/**
+ * @swagger
+ * /api/users/{id}/follow:
+ *   post:
+ *     summary: Follow a user
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *   delete:
+ *     summary: Unfollow a user
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ */
+/**
+ * @swagger
+ * /api/users/{id}/follow-status:
+ *   get:
+ *     summary: Check if current user is following this user
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: "returns json {is_following: true/false}"
+ */
+r.get('/:id/follow-status', auth, c.checkFollowStatus);
+
+r.post('/:id/follow', auth, c.followUser);
+r.delete('/:id/follow', auth, c.unfollowUser);
 
 module.exports = r;
 

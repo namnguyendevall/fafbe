@@ -5,10 +5,24 @@ module.exports = {
            p.skills, p.education, p.experience,
            p.portfolio, p.social_links,
            p.location, p.hourly_rate, p.availability,
-           p.rating_avg, p.total_jobs_done, p.created_at, p.updated_at
+           p.rating_avg, p.total_jobs_done, p.created_at, p.updated_at,
+           COALESCE(
+             json_agg(
+               json_build_object('skill_id', us.skill_id, 'name', s.name, 'skill_points', us.skill_points)
+             ) FILTER (WHERE us.skill_id IS NOT NULL),
+             '[]'
+           ) as skill_mastery
     FROM users u
     LEFT JOIN user_profiles p ON p.user_id = u.id
+    LEFT JOIN user_skills us ON us.user_id = u.id
+    LEFT JOIN skills s ON s.id = us.skill_id
     WHERE u.id = $1
+    GROUP BY u.id, u.email, u.role, u.status,
+             p.full_name, p.avatar_url, p.bio,
+             p.skills, p.education, p.experience,
+             p.portfolio, p.social_links,
+             p.location, p.hourly_rate, p.availability,
+             p.rating_avg, p.total_jobs_done, p.created_at, p.updated_at
   `,
 
   createProfile: `
@@ -47,11 +61,26 @@ module.exports = {
   p.updated_at,
 
   w.balance_points,
-  w.locked_points
+  w.locked_points,
+
+  COALESCE(
+    json_agg(
+      json_build_object('skill_id', us.skill_id, 'name', s.name, 'skill_points', us.skill_points)
+    ) FILTER (WHERE us.skill_id IS NOT NULL),
+    '[]'
+  ) as skill_mastery
+
 FROM users u
 LEFT JOIN user_profiles p ON p.user_id = u.id
 LEFT JOIN wallets w ON w.user_id = u.id
+LEFT JOIN user_skills us ON us.user_id = u.id
+LEFT JOIN skills s ON s.id = us.skill_id
 WHERE u.id = $1
+GROUP BY u.id, u.email, u.role, u.status,
+         p.full_name, p.avatar_url, p.bio, p.skills, p.education, p.experience,
+         p.portfolio, p.social_links, p.location, p.hourly_rate, p.availability,
+         p.rating_avg, p.total_jobs_done, p.created_at, p.updated_at,
+         w.balance_points, w.locked_points
 
   `,
 
@@ -59,11 +88,13 @@ WHERE u.id = $1
   INSERT INTO user_profiles (
     user_id, full_name, bio, skills,
     location, hourly_rate, availability,
+    avatar_url, education, experience, portfolio,
     created_at, updated_at
   )
   VALUES (
     $1, $2, $3, $4::jsonb,
     $5, $6, $7,
+    $8, $9::jsonb, $10::jsonb, $11::jsonb,
     NOW(), NOW()
   )
   ON CONFLICT (user_id)
@@ -74,13 +105,19 @@ WHERE u.id = $1
     location = EXCLUDED.location,
     hourly_rate = EXCLUDED.hourly_rate,
     availability = EXCLUDED.availability,
+    avatar_url = EXCLUDED.avatar_url,
+    education = EXCLUDED.education,
+    experience = EXCLUDED.experience,
+    portfolio = EXCLUDED.portfolio,
     updated_at = NOW()
   RETURNING *
 `,
   listUsers: `
-    SELECT id, email, role, status, created_at
-    FROM users
-    ORDER BY created_at DESC
+    SELECT u.id, u.email, u.role, u.status, u.created_at,
+           p.full_name, p.rating_avg, p.total_jobs_done, p.tier
+    FROM users u
+    LEFT JOIN user_profiles p ON p.user_id = u.id
+    ORDER BY u.created_at DESC
     LIMIT $1 OFFSET $2
   `,
 
@@ -106,9 +143,40 @@ WHERE u.id = $1
            p.skills, p.education, p.experience,
            p.portfolio, p.social_links,
            p.location, p.hourly_rate, p.availability,
-           p.rating_avg, p.total_jobs_done
+           p.rating_avg, p.total_jobs_done,
+           (SELECT COUNT(*) FROM user_followers WHERE following_id = u.id) as followers_count,
+           (SELECT COUNT(*) FROM user_followers WHERE follower_id = u.id) as following_count,
+           COALESCE(
+             json_agg(
+               json_build_object('skill_id', us.skill_id, 'name', s.name, 'skill_points', us.skill_points)
+             ) FILTER (WHERE us.skill_id IS NOT NULL),
+             '[]'
+           ) as skill_mastery
     FROM users u
     LEFT JOIN user_profiles p ON p.user_id = u.id
+    LEFT JOIN user_skills us ON us.user_id = u.id
+    LEFT JOIN skills s ON s.id = us.skill_id
     WHERE u.id = $1
+    GROUP BY u.id, u.email, u.role, u.status, u.created_at,
+             p.full_name, p.avatar_url, p.bio, p.skills, p.education, p.experience,
+             p.portfolio, p.social_links, p.location, p.hourly_rate, p.availability,
+             p.rating_avg, p.total_jobs_done
   `,
+
+  checkFollow: `
+    SELECT 1 FROM user_followers
+    WHERE follower_id = $1 AND following_id = $2
+  `,
+
+  followUser: `
+    INSERT INTO user_followers (follower_id, following_id)
+    VALUES ($1, $2)
+    RETURNING *
+  `,
+
+  unfollowUser: `
+    DELETE FROM user_followers
+    WHERE follower_id = $1 AND following_id = $2
+    RETURNING *
+  `
 };

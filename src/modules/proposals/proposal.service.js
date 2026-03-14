@@ -90,11 +90,11 @@ exports.acceptProposal = async (proposalId, clientId) => {
     const updateRes = await client.query(sql.updateStatus, [proposalId, 'ACCEPTED']);
     const updatedProposal = updateRes.rows[0];
 
-    // 4. Update Contract (Assign Worker & Active)
+    // 4. Update Contract (Assign Worker & PENDING)
     // Find the DRAFT contract for this job and assign worker
     const contractRes = await client.query(`
         UPDATE contracts 
-        SET worker_id = $1, status = 'ACTIVE',
+        SET worker_id = $1, status = 'PENDING',
             signature_worker = NULL, signature_client = NULL, signed_at = NULL,
             updated_at = NOW()
         WHERE job_id = $2 AND status = 'DRAFT'
@@ -103,6 +103,24 @@ exports.acceptProposal = async (proposalId, clientId) => {
     
     const contract = contractRes.rows[0];
     if (!contract) throw new Error("CONTRACT_NOT_FOUND");
+    
+    // 4.1 Inject Worker Info into the Contract Content HTML
+    const workerRes = await client.query('SELECT u.email, u.id, p.full_name FROM users u LEFT JOIN user_profiles p ON u.id = p.user_id WHERE u.id = $1', [proposal.worker_id]);
+    const workerInfo = workerRes.rows[0];
+    
+    if (workerInfo && contract.contract_content) {
+        const parts = contract.contract_content.split('Bên B - Người nhận việc');
+        if (parts.length > 1) {
+            let workerPart = parts[1]
+                .replace(/(Họ và tên:(?:<\/?[^>]+>|\s)*)\.{5,}/, `$1${workerInfo.full_name || 'N/A'}`)
+                .replace(/(Email đăng ký trên hệ thống FAF:(?:<\/?[^>]+>|\s)*)\.{5,}/, `$1${workerInfo.email || 'N/A'}`)
+                .replace(/(ID người dùng FAF:(?:<\/?[^>]+>|\s)*)\.{5,}/, `$1${workerInfo.id || 'N/A'}`);
+            
+            const newContent = parts[0] + 'Bên B - Người nhận việc' + workerPart;
+            await client.query('UPDATE contracts SET contract_content = $1 WHERE id = $2', [newContent, contract.id]);
+            contract.contract_content = newContent;
+        }
+    }
     
     // 5. FUNDS HANDLING: Funds are already locked in wallets.locked_points 
     // when the job was created in job.service.js. 
@@ -115,8 +133,8 @@ exports.acceptProposal = async (proposalId, clientId) => {
         WHERE worker_id = $1 AND status = 'PENDING' AND id != $2
     `, [proposal.worker_id, proposal.id]);
 
-    // 7. Update Job Status to IN_PROGRESS
-    await client.query("UPDATE jobs SET status = 'IN_PROGRESS', updated_at = NOW() WHERE id = $1", [proposal.job_id]);
+    // 7. Update Job Status to PENDING_SIGNATURE
+    await client.query("UPDATE jobs SET status = 'PENDING_SIGNATURE', updated_at = NOW() WHERE id = $1", [proposal.job_id]);
     
     await client.query("COMMIT");
     return { proposal: updatedProposal, contract, job };

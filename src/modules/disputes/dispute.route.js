@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const controller = require('./dispute.controller');
 const auth = require('../../middlewares/auth.middleware');
+const upload = require('../../middlewares/upload.middleware');
 
 
 /**
@@ -39,6 +40,20 @@ const auth = require('../../middlewares/auth.middleware');
  *         description: Dispute created
  */
 router.post('/', auth, controller.create);
+
+/**
+ * @swagger
+ * /api/disputes:
+ *   get:
+ *     summary: List all disputes (Admin/Manager)
+ *     tags: [Disputes]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of disputes
+ */
+router.get('/', auth, controller.listAll);
 
 /**
  * @swagger
@@ -84,13 +99,13 @@ router.get('/:id', auth, controller.get);
  *       201:
  *         description: Message added
  */
-router.post('/:id/messages', auth, controller.addMessage);
+router.post('/:id/messages', auth, upload.array('attachments', 5), controller.addMessage);
 
 /**
  * @swagger
  * /api/disputes/{id}/resolve:
  *   post:
- *     summary: Resolve dispute (Admin)
+ *     summary: Resolve dispute (Admin/Manager)
  *     tags: [Disputes]
  *     parameters:
  *       - in: path

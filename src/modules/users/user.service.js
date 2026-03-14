@@ -38,7 +38,11 @@ exports.updateProfile = async (userId, data) => {
     skills,
     location,
     hourly_rate,
-    availability
+    availability,
+    avatar_url,
+    education,
+    experience,
+    portfolio
   } = data;
 
   const client = await pool.connect();
@@ -54,24 +58,37 @@ exports.updateProfile = async (userId, data) => {
       skills ? JSON.stringify(skills) : null,
       location,
       hourly_rate,
-      availability
+      availability,
+      avatar_url !== undefined ? avatar_url : null,
+      education ? JSON.stringify(education) : null,
+      experience ? JSON.stringify(experience) : null,
+      portfolio ? JSON.stringify(portfolio) : null
     ]);
 
     // 2. Sync User Skills Table (normalized for matching engine)
+    // IMPORTANT: Do NOT delete existing skills as that would wipe earned skill_points!
     if (skills && Array.isArray(skills)) {
-      // Clear existing normalized skills specifically for this user
-      await client.query('DELETE FROM user_skills WHERE user_id = $1', [userId]);
+      const newSkillIds = skills.map(s => s.id || s).filter(Boolean).map(Number);
 
-      // Insert new skills
+      // Remove skills that are no longer in the profile (but keep skill_points for kept skills)
+      if (newSkillIds.length > 0) {
+        await client.query(
+          `DELETE FROM user_skills WHERE user_id = $1 AND skill_id NOT IN (${newSkillIds.map((_, i) => `$${i + 2}`).join(',')})`,
+          [userId, ...newSkillIds]
+        );
+      } else {
+        // No skills at all - clear all
+        await client.query('DELETE FROM user_skills WHERE user_id = $1', [userId]);
+      }
+
+      // Insert new skills (ON CONFLICT DO NOTHING to preserve existing skill_points)
       for (const skill of skills) {
-        // Handle both object {id, name} and raw id (just in case)
-        const skillId = skill.id || skill; 
-        
+        const skillId = skill.id || skill;
         if (skillId) {
           await client.query(
-            `INSERT INTO user_skills (user_id, skill_id) 
-             VALUES ($1, $2) 
-             ON CONFLICT DO NOTHING`,
+            `INSERT INTO user_skills (user_id, skill_id, skill_points) 
+             VALUES ($1, $2, 0) 
+             ON CONFLICT (user_id, skill_id) DO NOTHING`,
             [userId, skillId]
           );
         }
@@ -144,6 +161,43 @@ exports.getPortfolio = async (userId) => {
     const { rows } = await pool.query('SELECT portfolio_items FROM user_profiles WHERE user_id = $1', [userId]);
     return rows[0]?.portfolio_items || [];
 };
+
+exports.getPublicProfile = async (userId) => {
+    const { rows } = await pool.query(sql.getPublicProfile, [userId]);
+    const profile = rows[0];
+    if (!profile) return null;
+
+    // Supplement with real skill_points from user_skills table
+    const skillRes = await pool.query(`
+        SELECT us.skill_id, s.name, us.skill_points
+        FROM user_skills us
+        JOIN skills s ON s.id = us.skill_id
+        WHERE us.user_id = $1
+        ORDER BY us.skill_points DESC, s.name ASC
+    `, [userId]);
+
+    profile.skill_mastery = skillRes.rows;
+    return profile;
+};
+
+exports.followUser = async (followerId, followingId) => {
+    if (followerId === followingId) throw new Error("You cannot follow yourself");
+    const check = await pool.query(sql.checkFollow, [followerId, followingId]);
+    if (check.rows.length > 0) return { alreadyFollowing: true };
+    const { rows } = await pool.query(sql.followUser, [followerId, followingId]);
+    return rows[0];
+};
+
+exports.checkFollowStatus = async (followerId, followingId) => {
+    const check = await pool.query(sql.checkFollow, [followerId, followingId]);
+    return { is_following: check.rows.length > 0 };
+};
+
+exports.unfollowUser = async (followerId, followingId) => {
+    const { rows } = await pool.query(sql.unfollowUser, [followerId, followingId]);
+    return rows[0];
+};
+
 
 
 

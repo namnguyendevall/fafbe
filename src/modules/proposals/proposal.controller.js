@@ -42,7 +42,7 @@ exports.create = async (req, res) => {
     if (error.message === 'WORKER_BUSY_CANNOT_APPLY') return res.status(400).json({ message: "You cannot apply while you have an active job contract" });
 
     console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error", error: error.message, stack: error.stack });
   }
 };
 
@@ -55,7 +55,7 @@ exports.list = async (req, res) => {
             const job = await getJobById(jobId);
             if (!job) return res.status(404).json({ message: "Job not found" });
             
-            if (job.client_id !== req.user.id && req.user.role !== 'ADMIN') {
+            if (job.client_id !== req.user.id && req.user.role?.toLowerCase() !== 'admin') {
                 return res.status(403).json({ message: "Unauthorized to view proposals for this job" });
             }
 

@@ -48,3 +48,31 @@ exports.updatePortfolio = async (req, res) => {
     }
 };
 
+exports.followUser = async (req, res) => {
+    try {
+        const result = await s.followUser(req.user.id, req.params.id);
+        res.json({ message: 'Followed user successfully', data: result });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+exports.checkFollowStatus = async (req, res) => {
+    try {
+        const result = await s.checkFollowStatus(req.user.id, req.params.id);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+exports.unfollowUser = async (req, res) => {
+    try {
+        const result = await s.unfollowUser(req.user.id, req.params.id);
+        res.json({ message: 'Unfollowed user successfully', data: result });
+    } catch (error) {
+        res.status(400).json({ message: error.message });
+    }
+};
+
+

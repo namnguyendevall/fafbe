@@ -77,6 +77,26 @@ router.get('/:id', auth, controller.get);
 
 /**
  * @swagger
+ * /api/contracts/{id}/request-otp:
+ *   post:
+ *     summary: Request OTP to sign a contract
+ *     tags: [Contracts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: OTP sent
+ */
+router.post('/:id/request-otp', auth, controller.requestSignOtp);
+
+/**
+ * @swagger
  * /api/contracts/{id}/sign:
  *   post:
  *     summary: Sign a contract
@@ -89,6 +109,15 @@ router.get('/:id', auth, controller.get);
  *         required: true
  *         schema:
  *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               otp:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Contract signed
@@ -155,5 +184,15 @@ router.post('/:id/settle-request', auth, controller.requestSettlement);
  */
 router.post('/:id/finalize-settlement', auth, controller.finalizeSettlement);
 
+
+// ── Checkpoint actions (worker/employer) ──────────────────────────
+// Worker submits work for a checkpoint
+router.put('/checkpoints/:id/submit', auth, controller.submitCheckpoint);
+
+// Employer approves a submitted checkpoint
+router.put('/checkpoints/:id/approve', auth, controller.approveCheckpoint);
+
+// Employer rejects a submitted checkpoint
+router.put('/checkpoints/:id/reject', auth, controller.rejectCheckpoint);
 
 module.exports = router;

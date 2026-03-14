@@ -1,6 +1,8 @@
 const s = require("./contract.service");
 const notificationService = require('../notifications/notification.service');
 const chatService = require('../chat/chat.service');
+const authService = require('../auth/auth.service');
+const userService = require('../users/user.service');
 
 exports.updateContent = async (req, res) => {
     try {
@@ -16,9 +18,37 @@ exports.updateContent = async (req, res) => {
     }
 };
 
+exports.requestSignOtp = async (req, res) => {
+    try {
+        const user = await userService.getMyProfile(req.user.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+        
+        await authService.sendOtp(user.email, 'FAF - Xác nhận ký hợp đồng');
+        return res.json({ message: "OTP sent to your email" });
+    } catch (e) {
+        console.error(e);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 exports.sign = async (req, res) => {
     try {
         const { id } = req.params;
+        const { otp } = req.body;
+
+        if (!otp) {
+            return res.status(400).json({ message: "Mã OTP là bắt buộc" });
+        }
+
+        const user = await userService.getMyProfile(req.user.id);
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        try {
+            await authService.verifyOtpOnly(user.email, otp);
+        } catch (otpErr) {
+            return res.status(400).json({ message: otpErr.message === 'OTP invalid' ? 'Mã OTP không hợp lệ hoặc đã hết hạn' : 'Mã OTP không chính xác' });
+        }
+
         const result = await s.signContract({ contractId: id, userId: req.user.id });
         
         // Send System Message

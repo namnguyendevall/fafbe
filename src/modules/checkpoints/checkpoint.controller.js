@@ -17,9 +17,6 @@ exports.submit = async (req, res) => {
     });
 
     // Notify Client
-    const jobService = require('../jobs/job.service');
-    const notificationService = require('../notifications/notification.service');
-    const chatService = require('../chat/chat.service');
     const io = req.app.get('io');
     
     // To get client_id correctly, we fetch the job

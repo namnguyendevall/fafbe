@@ -176,6 +176,17 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     checkpointId = cpRes.rows[0].id;
     console.log(`   Checkpoint ID: ${checkpointId}`);
 
+    // --- SIGN CONTRACT ---
+    console.log('\n--- 7a. Sign Contract (Worker) ---');
+    const signWorkerRes = await runRequest(`/api/contracts/${contractId}/sign`, 'POST', { otp: '123456' }, tokenWorker);
+    if (signWorkerRes.statusCode !== 200) throw new Error(`Worker sign failed: ${signWorkerRes.body}`);
+    console.log(`✓ Worker signed`);
+
+    console.log('\n--- 7b. Sign Contract (Client) ---');
+    const signClientRes = await runRequest(`/api/contracts/${contractId}/sign`, 'POST', { otp: '123456' }, tokenClient);
+    if (signClientRes.statusCode !== 200) throw new Error(`Client sign failed: ${signClientRes.body}`);
+    console.log(`✓ Client signed (Status: ACTIVE)`);
+
     // --- WORK SUBMISSION ---
     console.log('\n--- 8. Work Submission (Worker) ---');
     const submitRes = await runRequest(`/api/checkpoints/${checkpointId}/submit`, 'POST', {

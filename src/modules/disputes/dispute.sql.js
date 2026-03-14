@@ -1,21 +1,24 @@
 module.exports = {
   create: `
-    INSERT INTO disputes (contract_id, raised_by, reason, status, created_at, updated_at)
-    VALUES ($1, $2, $3, 'OPEN', NOW(), NOW())
+    INSERT INTO disputes (contract_id, checkpoint_id, raised_by, reason, status, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, 'OPEN', NOW(), NOW())
     RETURNING *
   `,
   
   getById: `
     SELECT d.*, 
-           u.email as raiser_email
+           u.email as raiser_email,
+           cp.title as checkpoint_title,
+           cp.amount as checkpoint_amount
     FROM disputes d
     JOIN users u ON u.id = d.raised_by
+    LEFT JOIN checkpoints cp ON cp.id = d.checkpoint_id
     WHERE d.id = $1
   `,
 
   updateStatus: `
     UPDATE disputes
-    SET status = $2, resolution = $3, updated_at = NOW()
+    SET status = $2, resolution = $3, resolution_summary = $4, updated_at = NOW()
     WHERE id = $1
     RETURNING *
   `,
@@ -25,12 +28,48 @@ module.exports = {
     VALUES ($1, $2, $3, $4, NOW())
     RETURNING *
   `,
-  
   getMessages: `
-     SELECT m.*, u.email as sender_email
+     SELECT m.*, u.email as sender_email, u.role as sender_role
      FROM dispute_messages m
      JOIN users u ON u.id = m.sender_id
      WHERE m.dispute_id = $1
      ORDER BY m.created_at ASC
+  `,
+
+  listAll: `
+    SELECT d.*, 
+           u.email as raiser_email,
+           j.title as job_title,
+           cp.title as checkpoint_title,
+           cp.amount as escrow_amount,
+           uc.email as client_email,
+           uw.email as worker_email
+    FROM disputes d
+    JOIN users u ON u.id = d.raised_by
+    JOIN contracts c ON d.contract_id = c.id
+    JOIN jobs j ON c.job_id = j.id
+    LEFT JOIN checkpoints cp ON cp.id = d.checkpoint_id
+    LEFT JOIN users uc ON c.client_id = uc.id
+    LEFT JOIN users uw ON c.worker_id = uw.id
+    ORDER BY d.created_at DESC
+  `,
+
+  listByUser: `
+    SELECT d.*, 
+           u.email as raiser_email,
+           j.title as job_title,
+           cp.title as checkpoint_title,
+           cp.amount as escrow_amount,
+           uc.email as client_email,
+           uw.email as worker_email
+    FROM disputes d
+    JOIN users u ON u.id = d.raised_by
+    JOIN contracts c ON d.contract_id = c.id
+    JOIN jobs j ON c.job_id = j.id
+    LEFT JOIN checkpoints cp ON cp.id = d.checkpoint_id
+    LEFT JOIN users uc ON c.client_id = uc.id
+    LEFT JOIN users uw ON c.worker_id = uw.id
+    WHERE c.client_id = $1 OR c.worker_id = $1
+    ORDER BY d.created_at DESC
   `
 };

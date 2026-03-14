@@ -1,4 +1,97 @@
 const pool = require("../../config/database");
+const { OpenAI } = require('openai');
+
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || 'dummy_key_to_prevent_crash'
+});
+
+/**
+ * Perform an AI semantic match using OpenAI
+ * @param {Object} workerProfile - Full details of the worker (bio, skills, education, experience, portfolio)
+ * @param {Object} jobData - Full details of the job (title, description, required skills, job type, budget)
+ * @returns {Promise<{match_score: number, reason: string}>}
+ */
+exports.getAILLLMMatchScore = async (workerId, jobId, workerProfile, jobData) => {
+    // 1. Check Cache first
+    const client = await pool.connect();
+    try {
+        const cacheRes = await client.query('SELECT match_score, reason FROM ai_match_cache WHERE worker_id = $1 AND job_id = $2', [workerId, jobId]);
+        if (cacheRes.rows.length > 0) {
+            return cacheRes.rows[0];
+        }
+
+        // 2. Fetch from OpenAI if no cache (and if we have an API key)
+        if (!process.env.OPENAI_API_KEY) {
+            return {
+                match_score: 50,
+                reason: "[Mock] AI matching requires OPENAI_API_KEY to be configured in .env."
+            };
+        }
+
+        // Construct highly detailed System Prompt
+        const prompt = `
+You are an expert IT HR AI Assistant. Your task is to evaluate the technical fit between a Worker's CV and a Job Posting.
+You must return your response STRICTLY as a JSON object with exactly two keys: "match_score" (an integer from 0 to 100) and "reason" (a short, concise string max 150 characters explaining why, in Vietnamese).
+
+DO NOT wrap the response in markdown blocks like \`\`\`json. Just output the raw JSON string.
+
+WORKER CV INFO:
+- Bio: ${workerProfile.bio || 'N/A'}
+- Title: ${workerProfile.title || 'N/A'}
+- Hourly Rate: $${workerProfile.hourly_rate || 0}/hr
+- Education: ${JSON.stringify(workerProfile.education || [])}
+- Experience: ${JSON.stringify(workerProfile.experience || [])}
+- Portfolio: ${JSON.stringify(workerProfile.portfolio || [])}
+- Mastered Skills: ${JSON.stringify(workerProfile.skills || [])}
+
+JOB POSTING:
+- Title: ${jobData.title}
+- Description: ${jobData.description}
+- Type: ${jobData.job_type}
+- Budget: $${jobData.budget}
+- Required Skills: ${JSON.stringify(jobData.required_skills_data || [])}
+`;
+        
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [{ role: "system", content: prompt }],
+            temperature: 0.3, // Low temperature for consistent scoring
+            max_tokens: 150
+        });
+
+        let aiResult = { match_score: 0, reason: "Phân tích AI thất bại, hãy thử lại." };
+
+        try {
+            const rawText = response.choices[0].message.content.trim();
+            aiResult = JSON.parse(rawText);
+        } catch (parseError) {
+            console.error("Failed to parse OpenAI response:", response.choices[0].message.content);
+            // Attempt to glean some fallback score
+            aiResult = {
+                match_score: 65,
+                reason: "Robot AI không thể parse dữ liệu, nhưng có vẻ bạn phù hợp với công việc này."
+            };
+        }
+
+        // Clamp score to 0-100
+        aiResult.match_score = Math.max(0, Math.min(100, aiResult.match_score || 0));
+
+        // Save to cache securely
+        await client.query(`
+            INSERT INTO ai_match_cache (worker_id, job_id, match_score, reason) 
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (worker_id, job_id) 
+            DO UPDATE SET match_score = EXCLUDED.match_score, reason = EXCLUDED.reason, created_at = CURRENT_TIMESTAMP
+        `, [workerId, jobId, aiResult.match_score, aiResult.reason]);
+
+        return aiResult;
+    } catch (e) {
+        console.error("OpenAI matching error:", e);
+        return { match_score: 0, reason: "Lỗi Server nội bộ khi phân tích AI." };
+    } finally {
+        client.release();
+    }
+};
 
 /**
  * Calculate skill match score between user skills and job skills

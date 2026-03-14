@@ -1,6 +1,7 @@
 require('dotenv').config();
 var createError = require('http-errors');
 var express = require('express');
+var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 const cors = require("cors");
@@ -20,8 +21,8 @@ var app = express();
 
 // 🚨 CORS PHẢI ĐẶT TRƯỚC ROUTES
 app.use(cors({
-  origin: "http://localhost:5173",
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ["http://localhost:5173", "http://127.0.0.1:5173"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
@@ -33,7 +34,7 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-// static files middleware removed
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ✅ ROUTES
 app.use('/api/auth', authRoute);
@@ -60,6 +61,20 @@ const matchingRoute = require('./src/modules/matching/matching.route');
 app.use('/api/matching', matchingRoute);
 const adminRoute = require('./src/modules/admin/admin.route');
 app.use('/api/admin', adminRoute);
+const postRoute = require('./src/modules/posts/post.route');
+app.use('/api/posts', postRoute);
+const workSessionRoute = require('./src/modules/workSessions/workSession.route');
+app.use('/api/work-sessions', workSessionRoute);
+const uploadRoute = require('./src/modules/uploads/upload.route');
+app.use('/api/uploads', uploadRoute);
+const aiRoute = require('./src/modules/ai/ai.route');
+app.use('/api/ai', aiRoute);
+const walletRoute = require('./src/modules/wallets/wallet.route');
+app.use('/api/wallets', walletRoute);
+
+// Serve uploaded submission files publicly
+app.use('/uploads/submissions', express.static(path.join(__dirname, 'uploads/submissions')));
+
 
 // Swagger
 const swaggerUi = require('swagger-ui-express');

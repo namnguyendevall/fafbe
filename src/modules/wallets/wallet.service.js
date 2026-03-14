@@ -25,8 +25,8 @@ exports.releaseCheckpointFunds = async (client, { clientId, workerId, amount, re
     await client.query(sql.updateBalance, [workerId, payout]);
 
     // 3. Log Transactions
-    const clientWallet = await this.getWallet(client, clientId);
-    const workerWallet = await this.getWallet(client, workerId);
+    const clientWallet = await exports.getWallet(client, clientId);
+    const workerWallet = await exports.getWallet(client, workerId);
 
     // Client transaction (Full amount release)
     await client.query(sql.createTransaction, [
@@ -48,7 +48,7 @@ exports.refundLockedFunds = async (client, { userId, amount, referenceId, refere
     const updateRes = await client.query(sql.unlockFunds, [userId, amount]);
     if (updateRes.rowCount === 0) throw new Error("INSUFFICIENT_LOCKED_FUNDS");
 
-    const wallet = await this.getWallet(client, userId);
+    const wallet = await exports.getWallet(client, userId);
     await client.query(sql.createTransaction, [
         wallet.id, 'REFUND', amount, 'SUCCESS', referenceType, referenceId
     ]);
@@ -63,7 +63,7 @@ exports.lockBudget = async (client, { userId, amount, referenceId, referenceType
     const updateRes = await client.query(sql.lockFunds, [userId, amount]);
     if (updateRes.rowCount === 0) throw new Error("INSUFFICIENT_BALANCE");
 
-    const wallet = await this.getWallet(client, userId);
+    const wallet = await exports.getWallet(client, userId);
     await client.query(sql.createTransaction, [
         wallet.id, 'LOCK', amount, 'SUCCESS', referenceType, referenceId
     ]);

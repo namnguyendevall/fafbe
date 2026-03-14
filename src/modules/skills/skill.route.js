@@ -41,12 +41,15 @@ const auth = require('../../middlewares/auth.middleware');
  *       201:
  *         description: Skill created
  */
+const checkRole = require('../../middlewares/role.middleware');
+const isAdmin = checkRole(['admin']);
+
 // PUBLIC – FE dùng
 router.get('/', controller.getAll);
 
 // ADMIN
-router.post('/', auth, controller.create);
-router.put('/:id', auth, controller.update);
-router.delete('/:id', auth, controller.deactivate);
+router.post('/', auth, isAdmin, controller.create);
+router.put('/:id', auth, isAdmin, controller.update);
+router.delete('/:id', auth, isAdmin, controller.deactivate);
 
 module.exports = router;

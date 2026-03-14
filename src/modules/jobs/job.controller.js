@@ -1,6 +1,7 @@
 const { createJobWithContractAndCheckpoints, getJobById,
   listJobs,
   updateJob,
+  reviewJob,
   deleteJob, } = require("./job.service");
 const { getCategoryById } = require("../category/cate.service");
 
@@ -117,13 +118,12 @@ async function createJob(req, res) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (user.role !== "employer") {
+    if (user.role !== "employer" && user.role !== "admin") {
       return res.status(403).json({
-        message: "Only clients (task owners) can create jobs",
+        message: "Only clients (task owners) or admins can create jobs",
       });
     }
 
-    // ✅ 1. Destructure trước
     const {
       title,
       description,
@@ -135,6 +135,7 @@ async function createJob(req, res) {
       skills,
       startDate,
       endDate,
+      resourceUrls,
     } = req.body;
 
     // ✅ 2. Validate payload
@@ -173,12 +174,13 @@ async function createJob(req, res) {
         title: cp.title,
         description: cp.description,
         amount: Number(cp.amount),
-        due_date: cp.due_date ? new Date(cp.due_date) : null,
+        duration_days: Number(cp.duration_days) || 7,
       })),
       contractContent,
       categoryId: Number(categoryId),
       skills,
       deadline: req.body.deadline,
+      resourceUrls: resourceUrls || [],
     });
 
     const platformFeeAmount = Math.round(
@@ -197,8 +199,7 @@ async function createJob(req, res) {
             await notificationService.createNotification({
                 userId: adminId,
                 type: 'JOB_APPROVAL_REQUEST',
-                title: 'New Job Pending Approval',
-                message: `New job "${job.title}" requires approval.`,
+                title: `New job "${job.title}" requires approval.`,
                 data: { jobId: job.id },
                 io
             });
@@ -224,9 +225,10 @@ async function createJob(req, res) {
       },
     });
   } catch (error) {
-    if (error.message === "NOT_ENOUGH_POINTS") {
+    if (error.message === "WALLET_INSUFFICIENT_BALANCE" || error.message === "INSUFFICIENT_BALANCE") {
       return res.status(400).json({
-        message: "Not enough points to create job",
+        message: "Insufficient wallet balance to post this job",
+        error: "INSUFFICIENT_BALANCE"
       });
     }
 
@@ -240,7 +242,7 @@ async function createJob(req, res) {
    GET /api/jobs/:id
 ========================= */
 async function getJob(req, res) {
-  const job = await getJobById(Number(req.params.id));
+  const job = await getJobById(Number(req.params.id), req.user);
 
   if (!job) {
     return res.status(404).json({ message: 'Job not found' });
@@ -313,7 +315,7 @@ async function updateJobHandler(req, res) {
 ========================= */
 async function getAdminPendingJobs(req, res) {
   try {
-    if (req.user.role !== 'manager' && req.user.role !== 'ADMIN') {
+    if (req.user.role !== 'manager' && req.user.role !== 'admin') {
       return res.status(403).json({ message: "Unauthorized. Manager/Admin only." });
     }
 
@@ -332,7 +334,7 @@ async function getAdminPendingJobs(req, res) {
 
 async function reviewJobHandler(req, res) {
   try {
-    if (req.user.role !== 'manager' && req.user.role !== 'ADMIN') {
+    if (req.user.role !== 'manager' && req.user.role !== 'admin') {
       return res.status(403).json({ message: "Unauthorized. Manager/Admin only." });
     }
 
@@ -373,7 +375,7 @@ async function reviewJobHandler(req, res) {
     if (error.message === 'JOB_NOT_FOUND') return res.status(404).json({ message: "Job not found" });
     if (error.message === 'JOB_NOT_PENDING') return res.status(400).json({ message: "Job is not in pending status" });
     if (error.message === 'INVALID_STATUS') return res.status(400).json({ message: "Invalid status. Must be OPEN or REJECTED" });
-    return res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({ message: "Internal server error", error: error.message, stack: error.stack });
   }
 }
 

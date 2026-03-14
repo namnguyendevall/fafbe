@@ -47,10 +47,16 @@ const authMiddleware = require('../../middlewares/auth.middleware');
  *       201:
  *         description: Category created
  */
+const checkRole = require('../../middlewares/role.middleware');
+const isAdmin = checkRole(['admin']);
+
 // Public – FE load dropdown
 router.get('/', cateController.listCategories);
 
-// Admin only (sau này gắn middleware)
-router.post('/',authMiddleware, cateController.createCategory);
+// User proposal
+router.post('/proposals', authMiddleware, cateController.proposeCategory);
+
+// Admin only
+router.post('/', authMiddleware, isAdmin, cateController.createCategory);
 
 module.exports = router;
