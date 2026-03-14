@@ -28,7 +28,7 @@ module.exports = {
     LEFT JOIN review_skill_ratings rsr ON r.id = rsr.review_id
     LEFT JOIN skills s ON rsr.skill_id = s.id
     WHERE r.reviewee_id = $1 AND r.moderation_status = 'APPROVED'
-    GROUP BY r.id, reviewer.email, reviewee.email, c.job_id
+    GROUP BY r.id, r.contract_id, r.reviewer_id, r.reviewee_id, r.rating, r.comment, r.moderation_status, r.moderation_result, r.created_at, reviewer.email, reviewee.email, c.job_id
     ORDER BY r.created_at DESC
   `,
   
