@@ -19,7 +19,9 @@ exports.updateContent = async (req, res) => {
 };
 
 exports.requestSignOtp = async (req, res) => {
+    console.log(`>>> [requestSignOtp] Hit! User ID: ${req.user.id}, Contract ID: ${req.params.id}`);
     try {
+        console.log(`[requestSignOtp] Fetching profile for user ${req.user.id}`);
         const user = await userService.getMyProfile(req.user.id);
         if (!user) return res.status(404).json({ message: "User not found" });
         

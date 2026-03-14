@@ -2,7 +2,9 @@ const pool = require('../../config/database');
 const sql = require('./user.sql');
 
 exports.getMyProfile = async (userId) => {
+  console.log(`>>> [getMyProfile] Entry for userId: ${userId}`);
   const client = await pool.connect();
+  console.log(`[getMyProfile] Pool client acquired`);
   try {
     await client.query('BEGIN');
     // 1️⃣ đảm bảo profile tồn tại
