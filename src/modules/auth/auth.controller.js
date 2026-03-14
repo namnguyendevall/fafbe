@@ -2,8 +2,11 @@ const service = require('./auth.service');
 
 exports.register = async (req, res) => {
   try {
-    await service.register(req.body.email, req.body.password, req.body.role);
-    res.json({ message: 'OTP sent to email' });
+    const { user, mailSent } = await service.register(req.body.email, req.body.password, req.body.role);
+    res.json({ 
+      message: mailSent ? 'OTP sent to email' : 'Account created but failed to send email. Please use bypass OTP: 123456',
+      mailSent 
+    });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
