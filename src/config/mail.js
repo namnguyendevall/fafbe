@@ -26,6 +26,7 @@ const mailer = {
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message;
       console.error('[Mailer] FAILED via HTTPS:', errorMsg);
+      console.log(`[Mailer] TO: ${to}, CONTENT: ${html}`); // Log content so dev can see OTP
       if (err.response?.status === 401) {
         console.error('[Mailer] HINT: Your RESEND_API_KEY might be invalid.');
       }

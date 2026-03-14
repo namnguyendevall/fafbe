@@ -33,6 +33,7 @@ exports.register = async (email, password, role) => {
     await pool.query(sql.insertOtp, [email, otpHash, expires]);
     console.log(`[register] OTP record inserted`);
 
+    console.log(`[register] OTP for ${email} is: ${otp}`);
     console.log(`[register] Attempting to send mail in background to ${email}`);
     // DO NOT await this call to prevent registration hang
     mailer.sendMail({
@@ -40,9 +41,9 @@ exports.register = async (email, password, role) => {
       subject: 'FAF OTP Verification',
       html: `<h3>Your OTP: ${otp}</h3>`,
     }).then(() => {
-      console.log(`[register] Background mail sent successfully`);
+      console.log(`[register] Background mail sent successfully to ${email}`);
     }).catch(mailErr => {
-      console.error(`[register] Background mailer failed:`, mailErr.message);
+      console.error(`[register] Background mailer failed for ${email}:`, mailErr.message);
     });
 
     // Return immediately after DB success
@@ -87,6 +88,7 @@ exports.sendOtp = async (email, subject) => {
     throw dbErr;
   }
 
+  console.log(`[sendOtp] OTP for ${email} is: ${otp}`);
   console.log(`[sendOtp] Attempting to send mail in background to ${email}`);
   // DO NOT await this call to prevent registration/resend hang
   mailer.sendMail({
