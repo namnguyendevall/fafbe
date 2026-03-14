@@ -13,13 +13,13 @@ const options = {
     },
     servers: [
       {
-        url: process.env.BACKEND_URL || 'http://localhost:5000',
-        description: process.env.BACKEND_URL ? 'Production Server' : 'Development Server',
+        url: '/',
+        description: 'Main server (Relative path)',
       },
       {
         url: 'http://localhost:5000',
-        description: 'Local Development Server',
-      }
+        description: 'Local development server',
+      },
     ],
     components: {
       securitySchemes: {
