@@ -14,8 +14,12 @@ const options = {
     servers: [
       {
         url: process.env.BACKEND_URL || 'http://localhost:5000',
-        description: 'Development Server',
+        description: process.env.BACKEND_URL ? 'Production Server' : 'Development Server',
       },
+      {
+        url: 'http://localhost:5000',
+        description: 'Local Development Server',
+      }
     ],
     components: {
       securitySchemes: {
