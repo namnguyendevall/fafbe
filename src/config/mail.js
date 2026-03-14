@@ -11,6 +11,8 @@ const transporter = nodemailer.createTransport({
   tls: {
     rejectUnauthorized: false
   },
+  // Force IPv4 to avoid Gmail IPv6 issues in cloud/local environments
+  family: 4, 
   connectionTimeout: 10000,
   greetingTimeout: 10000,
   socketTimeout: 20000,
