@@ -13,9 +13,9 @@ module.exports = (allowedRoles) => {
     const userRole = req.user.role?.toLowerCase();
     const allowed = allowedRoles.map(r => r.toLowerCase());
 
-    const fs = require('fs');
-    const logMsg = `[RoleMiddleware] ${new Date().toISOString()} - User: ${req.user.role} -> ${userRole}, Allowed: ${allowed}\n`;
-    fs.appendFileSync('d:/FAF-BE/role_logs.txt', logMsg);
+    // Removed hardcoded debug logging to local file
+    // const logMsg = `[RoleMiddleware] ${new Date().toISOString()} - User: ${req.user.role} -> ${userRole}, Allowed: ${allowed}\n`;
+    // fs.appendFileSync('d:/FAF-BE/role_logs.txt', logMsg);
 
     if (!allowed.includes(userRole)) {
       return res.status(403).json({ 

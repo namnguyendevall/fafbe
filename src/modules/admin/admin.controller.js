@@ -7,8 +7,8 @@ exports.getPendingJobs = async (req, res) => {
     const jobs = await s.getPendingJobs();
     return res.json({ data: jobs });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -17,8 +17,8 @@ exports.getAllJobs = async (req, res) => {
     const jobs = await s.getAllJobs();
     return res.json({ data: jobs });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -41,8 +41,8 @@ exports.approveJob = async (req, res) => {
     
     return res.json({ message: "Job approved", data: result });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -69,8 +69,8 @@ exports.rejectJob = async (req, res) => {
     
     return res.json({ message: "Job rejected", data: result });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -79,8 +79,8 @@ exports.getDashboardStats = async (req, res) => {
     const stats = await s.getStats();
     return res.json({ data: stats });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -89,8 +89,8 @@ exports.getFinancialOverview = async (req, res) => {
     const financials = await s.getFinancials();
     return res.json({ data: financials });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -103,8 +103,8 @@ exports.listAllUsers = async (req, res) => {
     });
     return res.json({ data: result });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -122,8 +122,8 @@ exports.updateUserRoleHandler = async (req, res) => {
 
     return res.json({ message: "User role updated successfully", data: user });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 exports.getTransactions = async (req, res) => {
@@ -135,8 +135,8 @@ exports.getTransactions = async (req, res) => {
     });
     return res.json({ data: transactions });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -149,8 +149,8 @@ exports.getJobsManagement = async (req, res) => {
     });
     return res.json({ data: result });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -160,8 +160,8 @@ exports.getJobStats = async (req, res) => {
     const stats = await s.getJobStatsByPeriod(period || 'month');
     return res.json({ data: stats });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -170,8 +170,8 @@ exports.listCategoryProposals = async (req, res) => {
     const proposals = await s.getCategoryProposals();
     return res.json({ data: proposals });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -182,8 +182,8 @@ exports.approveCategoryProposal = async (req, res) => {
     if (!result) return res.status(404).json({ message: "Proposal not found" });
     return res.json({ message: "Category proposal approved", data: result });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -194,8 +194,8 @@ exports.rejectCategoryProposal = async (req, res) => {
     if (!result) return res.status(404).json({ message: "Proposal not found" });
     return res.json({ message: "Category proposal rejected", data: result });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -222,8 +222,8 @@ exports.listAdminNotifications = async (req, res) => {
     });
     return res.json({ data: notifications });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
@@ -233,7 +233,7 @@ exports.markNotificationRead = async (req, res) => {
     await s.markNotificationRead(id);
     return res.json({ message: "Notification marked as read" });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("ADMIN_ERROR [getJobsManagement]:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };

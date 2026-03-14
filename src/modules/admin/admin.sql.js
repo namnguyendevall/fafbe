@@ -54,7 +54,7 @@ module.exports = {
       ) as total_fees,
       (SELECT COALESCE(SUM(balance_points), 0) FROM wallets) as tokens_circulating,
       (SELECT COALESCE(SUM(locked_points), 0) FROM wallets) as locked_in_escrow,
-      (SELECT COUNT(*)::int FROM disputes WHERE status = 'OPEN') as active_disputes
+      (SELECT COUNT(*)::int FROM (SELECT 1 FROM information_schema.tables WHERE table_name = 'disputes') as check_table CROSS JOIN disputes WHERE status = 'OPEN') as active_disputes
   `,
 
 
@@ -80,7 +80,7 @@ module.exports = {
   listTransactions: `
     SELECT t.*, u.email, p.full_name
     FROM transactions t
-    JOIN wallets w ON t.wallet_id = w.id
+    JOIN wallets w ON t.wallet_id = w.user_id
     JOIN users u ON w.user_id = u.id
     LEFT JOIN user_profiles p ON u.id = p.user_id
     ORDER BY t.created_at DESC

@@ -19,7 +19,7 @@ module.exports = {
   `,
 
   getUserConversations: `
-    SELECT c.*, 
+    SELECT c.id, c.type, c.created_at, c.updated_at,
            json_agg(json_build_object('id', u.id, 'email', u.email, 'full_name', up.full_name)) as participants
     FROM conversations c
     JOIN conversation_participants cp ON cp.conversation_id = c.id
@@ -27,7 +27,7 @@ module.exports = {
     JOIN users u ON u.id = cp_all.user_id
     LEFT JOIN user_profiles up ON up.user_id = u.id
     WHERE cp.user_id = $1
-    GROUP BY c.id
+    GROUP BY c.id, c.type, c.created_at, c.updated_at
     ORDER BY c.updated_at DESC
   `,
 
