@@ -55,14 +55,31 @@ exports.register = async (email, password, role) => {
 };
 
 exports.verifyOtp = async (email, otp) => {
+  console.log(`>>> [verifyOtp] Checking for ${email}, code: ${otp}`);
   const { rows } = await pool.query(sql.findValidOtp, [email]);
-  if (!rows.length) throw new Error('OTP invalid');
+  
+  if (!rows.length) {
+    console.log(`[verifyOtp] FAILED: No valid OTP found for ${email}. Check if expired or is_used.`);
+    const allOtps = await pool.query('SELECT * FROM otps WHERE email = $1 ORDER BY created_at DESC LIMIT 1', [email]);
+    if (allOtps.rows.length) {
+      const latest = allOtps.rows[0];
+      console.log(`[verifyOtp] Debug Info: Latest OTP for this email was created at ${latest.created_at}, expires at ${latest.expires_at}, is_used: ${latest.is_used}`);
+      console.log(`[verifyOtp] Current DB Time (NOW()):`, (await pool.query('SELECT NOW()')).rows[0].now);
+    } else {
+      console.log(`[verifyOtp] Debug Info: No OTP records at all for ${email}`);
+    }
+    throw new Error('OTP invalid');
+  }
 
   const isMatch = await bcrypt.compare(otp, rows[0].otp_hash);
-  if (!isMatch) throw new Error('OTP wrong');
+  if (!isMatch) {
+    console.log(`[verifyOtp] FAILED: Hash mismatch for ${email}`);
+    throw new Error('OTP wrong');
+  }
 
   await pool.query(sql.verifyUserEmail, [email]);
   await pool.query(sql.markOtpUsed, [rows[0].id]);
+  console.log(`[verifyOtp] SUCCESS for ${email}`);
 };
 
 exports.verifyOtpOnly = async (email, otp) => {
