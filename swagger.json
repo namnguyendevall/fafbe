@@ -10,7 +10,7 @@
   },
   "servers": [
     {
-      "url": "http://localhost:5000",
+      "url": "https://fafbe-production.up.railway.app",
       "description": "Development Server"
     }
   ],
