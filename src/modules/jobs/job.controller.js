@@ -242,27 +242,37 @@ async function createJob(req, res) {
    GET /api/jobs/:id
 ========================= */
 async function getJob(req, res) {
-  const job = await getJobById(Number(req.params.id), req.user);
+  try {
+    const job = await getJobById(Number(req.params.id), req.user);
 
-  if (!job) {
-    return res.status(404).json({ message: 'Job not found' });
+    if (!job) {
+      return res.status(404).json({ message: 'Job not found' });
+    }
+
+    return res.json({ data: job });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
   }
-
-  return res.json({ data: job });
 }
 
 /* =========================
    GET /api/jobs
 ========================= */
 async function getListJobs(req, res) {
-  // Public job board only shows OPEN jobs
-  const jobs = await listJobs({
-    status: 'OPEN',
-    categoryId: req.query.categoryId,
-    clientId: req.query.clientId,
-  });
+  try {
+    // Public job board only shows OPEN jobs
+    const jobs = await listJobs({
+      status: 'OPEN',
+      categoryId: req.query.categoryId,
+      clientId: req.query.clientId,
+    });
 
-  return res.json({ data: jobs });
+    return res.json({ data: jobs });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 }
 
 
@@ -300,14 +310,19 @@ async function getMyJobs(req, res) {
    PUT /api/jobs/:id
 ========================= */
 async function updateJobHandler(req, res) {
-  const jobId = Number(req.params.id);
+  try {
+    const jobId = Number(req.params.id);
 
-  const job = await updateJob(jobId, req.body);
+    const job = await updateJob(jobId, req.body);
 
-  return res.json({
-    message: 'Job updated successfully',
-    data: job,
-  });
+    return res.json({
+      message: 'Job updated successfully',
+      data: job,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
 }
 
 /* =========================

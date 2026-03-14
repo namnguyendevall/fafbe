@@ -1,27 +1,47 @@
 const s = require('./user.service');
 
 exports.me = async (req, res) => {
-  const profile = await s.getMyProfile(req.user.id);
-  res.json(profile);
+  try {
+    const profile = await s.getMyProfile(req.user.id);
+    res.json(profile);
+  } catch (error) {
+    console.error('Error in me controller:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 exports.updateMe = async (req, res) => {
-  const profile = await s.updateProfile(req.user.id, req.body);
-  res.json(profile);
+  try {
+    const profile = await s.updateProfile(req.user.id, req.body);
+    res.json(profile);
+  } catch (error) {
+    console.error('Error in updateMe controller:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 exports.listUsers = async (req, res) => {
-  const page = Number(req.query.page || 1);
-  const limit = Number(req.query.limit || 10);
+  try {
+    const page = Number(req.query.page || 1);
+    const limit = Number(req.query.limit || 10);
 
-  const result = await s.listUsers(page, limit);
-  res.json(result);
+    const result = await s.listUsers(page, limit);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in listUsers controller:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 exports.getFeaturedWorkers = async (req, res) => {
-  const limit = Number(req.query.limit || 10);
-  const workers = await s.getFeaturedWorkers(limit);
-  res.json(workers);
+  try {
+    const limit = Number(req.query.limit || 10);
+    const workers = await s.getFeaturedWorkers(limit);
+    res.json(workers);
+  } catch (error) {
+    console.error('Error in getFeaturedWorkers controller:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 exports.getPublicProfile = async (req, res) => {
