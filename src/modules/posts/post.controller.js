@@ -14,9 +14,15 @@ if (process.env.CLOUDINARY_URL) {
 /** Upload a buffer to Cloudinary and return the secure URL */
 const uploadToCloudinary = (buffer, folder = 'faf/posts') => {
     return new Promise((resolve, reject) => {
+        // Create a 30-second timeout to prevent hanging the whole request
+        const timeout = setTimeout(() => {
+            reject(new Error('Cloudinary upload timed out after 30 seconds'));
+        }, 30000);
+
         const stream = cloudinary.uploader.upload_stream(
             { folder, resource_type: 'image', transformation: [{ width: 1200, quality: 'auto:good', crop: 'limit' }] },
             (error, result) => {
+                clearTimeout(timeout);
                 if (error) return reject(error);
                 resolve(result.secure_url);
             }
