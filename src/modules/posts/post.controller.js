@@ -28,16 +28,26 @@ const uploadToCloudinary = (buffer, folder = 'faf/posts') => {
 const createPost = async (req, res, next) => {
     try {
         const { content } = req.body;
+        console.log(`>>> [createPost] User: ${req.user?.id}, Content length: ${content?.length}`);
+        
         let imageUrl = req.body.imageUrl || null;
 
         if (req.file && req.file.buffer) {
+            console.log(`[createPost] File found, size: ${req.file.size} bytes. Uploading to Cloudinary...`);
             imageUrl = await uploadToCloudinary(req.file.buffer);
+            console.log(`[createPost] Cloudinary SUCCESS: ${imageUrl}`);
+        } else {
+            console.log(`[createPost] No file attachment found.`);
         }
 
+        console.log(`[createPost] Calling postService.createPost...`);
         const post = await postService.createPost(req.user.id, content, imageUrl);
+        console.log(`[createPost] SUCCESS: Post created with ID: ${post.id}`);
+        
         res.status(201).json({ message: 'Post created successfully', data: post });
     } catch (error) {
-        console.error('[createPost] Error:', error.message);
+        console.error('[createPost] FATAL ERROR:', error.message);
+        console.error('[createPost] Stack:', error.stack);
         next(error);
     }
 };
