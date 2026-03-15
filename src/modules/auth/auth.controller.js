@@ -32,9 +32,12 @@ exports.resendOtp = async (req, res) => {
 
 exports.login = async (req, res) => {
   try {
+    console.log(`>>> [Login Controller] Attempting login for: ${req.body.email}`);
     const token = await service.login(req.body.email, req.body.password);
+    console.log(`[Login Controller] SUCCESS for: ${req.body.email}`);
     res.json({ token });
   } catch (e) {
+    console.error(`[Login Controller] FAILED for ${req.body.email}:`, e.message);
     res.status(401).json({ error: e.message });
   }
 };

@@ -134,21 +134,43 @@ exports.sendOtp = async (email, subject) => {
 // LOGIN
 // =======================
 exports.login = async (email, password) => {
+  console.log(`[login service] Looking up user: ${email}`);
   const { rows } = await pool.query(sql.findUserByEmail, [email]);
-  if (!rows.length) throw new Error('User not found');
+  
+  if (!rows.length) {
+    console.log(`[login service] User NOT FOUND: ${email}`);
+    throw new Error('User not found');
+  }
 
   const user = rows[0];
-  if (user.status !== 'ACTIVE') throw new Error('Account not activated');
+  console.log(`[login service] User found. Status: ${user.status}, ID: ${user.id}`);
+  
+  if (user.status !== 'ACTIVE') {
+    console.log(`[login service] Access denied: Account status is ${user.status}`);
+    throw new Error('Account not activated');
+  }
 
+  console.log(`[login service] Comparing passwords...`);
   const match = await bcrypt.compare(password, user.password_hash);
-  if (!match) throw new Error('Wrong password');
+  
+  if (!match) {
+    console.log(`[login service] Password MISMATCH for: ${email}`);
+    throw new Error('Wrong password');
+  }
+
+  console.log(`[login service] Password OK. Signing JWT...`);
+  if (!process.env.JWT_SECRET) {
+    console.error(`[login service] FATAL: JWT_SECRET is MISSING in process.env`);
+    throw new Error('Server configuration error');
+  }
 
   const token = jwt.sign(
     { id: user.id, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
+  console.log(`[login service] JWT signed. Updating last login...`);
   await pool.query(sql.updateLastLogin, [user.id]);
 
   return token;
