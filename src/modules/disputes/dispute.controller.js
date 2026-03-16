@@ -74,13 +74,20 @@ exports.create = async (req, res) => {
 
 exports.listAll = async (req, res) => {
     try {
+        const { contractId } = req.query;
         let result;
         if (req.user.role === 'admin' || req.user.role === 'manager') {
             result = await s.listAll();
         } else {
             result = await s.listByUser(req.user.id);
         }
+
+        if (contractId) {
+            result = result.filter(d => String(d.contract_id) === String(contractId));
+        }
+
         return res.json({ data: result });
+
     } catch (e) {
         console.error(e);
         return res.status(500).json({ message: "Internal server error" });

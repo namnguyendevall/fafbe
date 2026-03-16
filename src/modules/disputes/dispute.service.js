@@ -27,6 +27,11 @@ exports.createDispute = async ({ contractId, checkpointId, userId, reason }) => 
         // Update Checkpoint Status to DISPUTED
         await client.query("UPDATE checkpoints SET status = 'DISPUTED' WHERE id = $1", [checkpointId]);
         
+        // Update Contract and Job Status to DISPUTED
+        await client.query("UPDATE contracts SET status = 'DISPUTED' WHERE id = $1", [contractId]);
+        await client.query("UPDATE jobs SET status = 'DISPUTED' WHERE id = $1", [contract.job_id]);
+
+        
         // Notify other party + Admin
         // Identify other party
         const otherPartyId = (userId === contract.client_id) ? contract.worker_id : contract.client_id;
@@ -141,6 +146,8 @@ exports.resolveDispute = async ({ disputeId, resolution, adminId, io, resolution
 
             // Cancel Contract since worker failed
             await client.query("UPDATE contracts SET status = 'CANCELLED' WHERE id = $1", [contract.id]);
+            await client.query("UPDATE jobs SET status = 'CANCELLED' WHERE id = $1", [contract.job_id]);
+
             
             // Refund ALL non-approved checkpoints for this contract
             // (If cp was handled above, we exclude it or just query all remaining)
@@ -205,6 +212,7 @@ exports.resolveDispute = async ({ disputeId, resolution, adminId, io, resolution
             } else {
                 // Ensure contract remains ACTIVE
                 await client.query("UPDATE contracts SET status = 'ACTIVE' WHERE id = $1", [contract.id]);
+                await client.query("UPDATE jobs SET status = 'IN_PROGRESS' WHERE id = $1", [contract.job_id]);
             }
 
         } else {
