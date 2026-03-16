@@ -15,6 +15,11 @@ exports.submitWork = async ({ checkpointId, workerId, submissionData }) => {
         const cp = cpRes.rows[0];
         if (!cp) throw new Error("CHECKPOINT_NOT_FOUND");
         
+        // 1.1 Check Rework Limit
+        if (cp.rework_count >= cp.rework_limit) {
+            throw new Error("REWORK_LIMIT_REACHED");
+        }
+
         // Check Contract
         const contractRes = await client.query('SELECT * FROM contracts WHERE id = $1', [cp.contract_id]);
         const contract = contractRes.rows[0];
@@ -110,10 +115,15 @@ exports.rejectWork = async (checkpointId, clientId) => {
 
         if (job.client_id !== clientId) throw new Error("UNAUTHORIZED");
 
-        // Update status back to PENDING (or REJECTED?)
-        // Usually, if rejected, it goes back to PENDING (so worker can resubmit) 
-        // or REJECTED status. Let's use REJECTED.
-        const { rows } = await client.query(sql.updateStatus, [checkpointId, 'REJECTED']);
+        // Update status back to REJECTED and increment rework_count
+        const { rows } = await client.query(`
+            UPDATE checkpoints 
+            SET status = 'REJECTED', 
+                rework_count = rework_count + 1,
+                updated_at = NOW() 
+            WHERE id = $1 
+            RETURNING *
+        `, [checkpointId]);
         return rows[0];
 
     } finally {

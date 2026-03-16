@@ -67,7 +67,8 @@ exports.create = async (req, res) => {
         console.error(e);
         if (e.message === "UNAUTHORIZED") return res.status(403).json({ message: "Unauthorized"});
         if (e.message === "CONTRACT_NOT_FOUND") return res.status(404).json({ message: "Contract not found"});
-        return res.status(500).json({ message: "Internal server error" });
+        if (e.message === "CHECKPOINT_NOT_FOUND") return res.status(404).json({ message: "Checkpoint not found"});
+        return res.status(400).json({ message: e.message || "Internal server error" });
     }
 };
 
