@@ -25,9 +25,9 @@ var app = express();
 
 // 🚨 CORS PHẢI ĐẶT TRƯỚC ROUTES
 app.use(cors({
-  origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(',') : ["http://localhost:5173", "http://127.0.0.1:5173", "https://faf-web.vercel.app"],
+  origin: true, // Echoes the request origin, allowing all
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   credentials: true
 }));
 

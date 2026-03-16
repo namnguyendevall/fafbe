@@ -2,8 +2,10 @@ const pool = require("../../config/database");
 const sql = require("./notification.sql");
 
 exports.createNotification = async ({ userId, type, title, message, data, io }) => {
+    // Defensive check for message to avoid DB constraint violation
+    const finalMessage = message || title || "New notification from FAF";
     const dataJson = data ? JSON.stringify(data) : null;
-    const { rows } = await pool.query(sql.create, [userId, type, title, message, dataJson]);
+    const { rows } = await pool.query(sql.create, [userId, type, title, finalMessage, dataJson]);
     const notification = rows[0];
     
     // Emit realtime notification via Socket.io
