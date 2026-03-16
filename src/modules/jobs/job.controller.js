@@ -113,16 +113,21 @@ const BASE_CONTRACT_TEMPLATE = {
 async function createJob(req, res) {
   try {
     const user = req.user;
+    console.log(`>>> [createJob] User ID: ${user?.id}, Role: ${user?.role}, Email: ${user?.email}`);
 
     if (!user) {
+      console.error(`[createJob] FAILED: No user found in request (Unauthorized)`);
       return res.status(401).json({ message: "Unauthorized" });
     }
 
     if (user.role !== "employer" && user.role !== "admin") {
+      console.error(`[createJob] FAILED: User role "${user.role}" is NOT authorized. Expected "employer" or "admin".`);
       return res.status(403).json({
         message: "Only clients (task owners) or admins can create jobs",
       });
     }
+
+    console.log(`[createJob] Role check PASSED for user: ${user.id}`);
 
     const {
       title,
