@@ -84,33 +84,39 @@ exports.zalopayCallback = async (req, res) => {
     let result = {};
     try {
         const { data: dataStr, mac: reqMac } = req.body;
+        console.log('[ZALOPAY CALLBACK] Received body:', JSON.stringify(req.body));
 
         // Verify signature
         const mac = CryptoJS.HmacSHA256(dataStr, config.key2).toString();
+        console.log('[ZALOPAY CALLBACK] Expected MAC:', mac);
+        console.log('[ZALOPAY CALLBACK] Request MAC:', reqMac);
 
         if (mac !== reqMac) {
+            console.error('[ZALOPAY CALLBACK] MAC verification failed');
             result = { return_code: -1, return_message: 'Invalid MAC' };
         } else {
             const dataJson = JSON.parse(dataStr);
+            console.log('[ZALOPAY CALLBACK] Data JSON:', JSON.stringify(dataJson));
 
-            // Extract userId from app_user (e.g. "user_75")
             const userId = dataJson.app_user.replace('user_', '');
             const amountVnd = dataJson.amount;
             const pointsToAdd = Math.floor(amountVnd / config.exchangeRate);
             const transId = dataJson.zp_trans_id.toString();
 
+            console.log(`[ZALOPAY CALLBACK] Processing: User=${userId}, Points=${pointsToAdd}, TransId=${transId}`);
+
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
 
-                // Idempotency check
                 const existing = await client.query(
                     'SELECT id FROM transactions WHERE reference_id = $1 AND reference_type = $2',
                     [transId, 'ZALOPAY_DEPOSIT']
                 );
 
                 if (existing.rows.length === 0) {
-                    await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
+                    const updateRes = await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
+                    console.log('[ZALOPAY CALLBACK] Balance update result:', updateRes.rowCount > 0 ? 'SUCCESS' : 'FAILED (User matching issue?)');
 
                     const walletRes = await client.query(walletSql.getByUserId, [userId]);
                     const walletId = walletRes.rows[0]?.id;
@@ -119,21 +125,26 @@ exports.zalopayCallback = async (req, res) => {
                         await client.query(walletSql.createTransaction, [
                             walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', transId
                         ]);
+                        console.log('[ZALOPAY CALLBACK] Transaction record created');
+                    } else {
+                        console.error('[ZALOPAY CALLBACK] Wallet NOT found for user_', userId);
                     }
+                } else {
+                    console.log('[ZALOPAY CALLBACK] Transaction already processed (idempotency)');
                 }
 
                 await client.query('COMMIT');
                 result = { return_code: 1, return_message: 'success' };
             } catch (err) {
                 await client.query('ROLLBACK');
-                console.error('Error processing ZaloPay callback DB update:', err);
+                console.error('[ZALOPAY CALLBACK] DB Error:', err);
                 result = { return_code: 0, return_message: 'DB error' };
             } finally {
                 client.release();
             }
         }
     } catch (ex) {
-        console.error('ZaloPay callback exception:', ex.message);
+        console.error('[ZALOPAY CALLBACK] Exception:', ex.message);
         result = { return_code: 0, return_message: ex.message };
     }
 

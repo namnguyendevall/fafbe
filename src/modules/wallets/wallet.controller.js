@@ -81,6 +81,7 @@ exports.depositMomo = async (req, res) => {
 
 exports.momoIpn = async (req, res) => {
     try {
+        console.log('[MOMO IPN] Received Body:', JSON.stringify(req.body));
         const {
             partnerCode, orderId, requestId, amount, orderInfo, orderType, transId,
             resultCode, message, payType, responseTime, extraData, signature
@@ -93,8 +94,11 @@ exports.momoIpn = async (req, res) => {
                                         .update(rawSignature)
                                         .digest('hex');
 
+        console.log('[MOMO IPN] Expected Signature:', expectedSignature);
+        console.log('[MOMO IPN] Request Signature:', signature);
+
         if (signature !== expectedSignature) {
-            console.warn("Invalid MoMo IPN signature");
+            console.warn("[MOMO IPN] Invalid signature verification");
             return res.status(400).json({ message: "Invalid signature" });
         }
 
@@ -103,40 +107,48 @@ exports.momoIpn = async (req, res) => {
             try {
                 await client.query('BEGIN');
 
-                // Extract userId from orderId (deposit_{userId}_{timestamp})
                 const parts = orderId.split('_');
                 const userId = parts[1];
+                const pointsToAdd = Math.floor(amount / config.exchangeRate);
+                const sTransId = transId.toString();
 
-                const pointsToAdd = Math.floor(amount * config.exchangeRate);
+                console.log(`[MOMO IPN] Processing: User=${userId}, Points=${pointsToAdd}, TransId=${sTransId}`);
 
-                // Check if transaction already processed (to handle duplicate IPNs)
-                const txCheck = await client.query('SELECT id FROM transactions WHERE reference_id = $1 AND reference_type = $2', [transId.toString(), 'MOMO_DEPOSIT']);
+                const txCheck = await client.query('SELECT id FROM transactions WHERE reference_id = $1 AND reference_type = $2', [sTransId, 'MOMO_DEPOSIT']);
+                
                 if (txCheck.rows.length === 0) {
-                    // Update user balance
-                    await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
-                    
-                    // Log transaction
+                    const updateRes = await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
+                    console.log('[MOMO IPN] Balance update result:', updateRes.rowCount > 0 ? 'SUCCESS' : 'FAILED (User matching issue?)');
+
                     const walletRes = await client.query(walletSql.getByUserId, [userId]);
-                    const walletId = walletRes.rows[0].id;
+                    const walletId = walletRes.rows[0]?.id;
                     
-                    await client.query(walletSql.createTransaction, [
-                        walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'MOMO_DEPOSIT', transId.toString()
-                    ]);
+                    if (walletId) {
+                        await client.query(walletSql.createTransaction, [
+                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'MOMO_DEPOSIT', sTransId
+                        ]);
+                        console.log('[MOMO IPN] Transaction record created');
+                    } else {
+                        console.error('[MOMO IPN] Wallet NOT found for user_', userId);
+                    }
+                } else {
+                    console.log('[MOMO IPN] Transaction already processed (idempotency)');
                 }
 
                 await client.query('COMMIT');
             } catch (err) {
                 await client.query('ROLLBACK');
-                console.error("Error processing MoMo IPN DB update:", err);
+                console.error("[MOMO IPN] DB Error:", err);
             } finally {
                 client.release();
             }
+        } else {
+            console.log('[MOMO IPN] Payment failed with resultCode:', resultCode);
         }
 
-        // Acknowledge MoMo
         return res.status(204).send();
     } catch (e) {
-        console.error("Momo IPN general error:", e);
+        console.error("[MOMO IPN] General Exception:", e);
         return res.status(500).send();
     }
 };
