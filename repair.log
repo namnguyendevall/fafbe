@@ -1,0 +1,76 @@
+Starting ULTIMATE DB REPAIR at 2026-03-16T16:58:31.993Z
+Starting ULTIMATE DB REPAIR (Independent Commits)...
+Processing table: dispute_messages
+- Clearing existing identity/default for dispute_messages.id
+- Adding IDENTITY to dispute_messages.id (integer)
+- Syncing sequence for dispute_messages to 4
+Table dispute_messages fixed successfully.
+Processing table: disputes
+- Clearing existing identity/default for disputes.id
+- Adding IDENTITY to disputes.id (integer)
+- Syncing sequence for disputes to 2
+Table disputes fixed successfully.
+Processing table: proposals
+- Clearing existing identity/default for proposals.id
+- Adding IDENTITY to proposals.id (integer)
+- Syncing sequence for proposals to 7
+Table proposals fixed successfully.
+Processing table: category_proposals
+- Clearing existing identity/default for category_proposals.id
+- Adding IDENTITY to category_proposals.id (integer)
+- Syncing sequence for category_proposals to 2
+Table category_proposals fixed successfully.
+Processing table: job_categories
+- Clearing existing identity/default for job_categories.id
+- Adding IDENTITY to job_categories.id (bigint)
+- Syncing sequence for job_categories to 12
+Table job_categories fixed successfully.
+Processing table: otps
+- Clearing existing identity/default for otps.id
+- Adding IDENTITY to otps.id (integer)
+- Syncing sequence for otps to 24
+Table otps fixed successfully.
+Processing table: messages
+- Clearing existing identity/default for messages.id
+- Adding IDENTITY to messages.id (integer)
+- Syncing sequence for messages to 17
+Table messages fixed successfully.
+Processing table: transactions
+- Clearing existing identity/default for transactions.id
+- Adding IDENTITY to transactions.id (integer)
+- Syncing sequence for transactions to 13
+Table transactions fixed successfully.
+Processing table: post_likes
+- Clearing existing identity/default for post_likes.id
+- Adding IDENTITY to post_likes.id (integer)
+- Syncing sequence for post_likes to 1
+Table post_likes fixed successfully.
+Processing table: admin_notifications
+- Clearing existing identity/default for admin_notifications.id
+- Adding IDENTITY to admin_notifications.id (integer)
+- Syncing sequence for admin_notifications to 1
+Table admin_notifications fixed successfully.
+Processing table: ai_match_cache
+- Clearing existing identity/default for ai_match_cache.id
+- Adding IDENTITY to ai_match_cache.id (integer)
+- Syncing sequence for ai_match_cache to 1
+Table ai_match_cache fixed successfully.
+Processing table: checkpoint_submissions
+- Clearing existing identity/default for checkpoint_submissions.id
+- Adding IDENTITY to checkpoint_submissions.id (integer)
+- Syncing sequence for checkpoint_submissions to 1
+Table checkpoint_submissions fixed successfully.
+Processing table: dispute_evidences
+- Clearing existing identity/default for dispute_evidences.id
+- Adding IDENTITY to dispute_evidences.id (integer)
+- Syncing sequence for dispute_evidences to 1
+Table dispute_evidences fixed successfully.
+Processing table: post_comments
+- Clearing existing identity/default for post_comments.id
+- Ensuring UUID default for post_comments.id
+Table post_comments fixed successfully.
+Processing table: posts
+- Clearing existing identity/default for posts.id
+- Ensuring UUID default for posts.id
+Table posts fixed successfully.
+ULTIMATE REPAIR ATTEMPT COMPLETE!

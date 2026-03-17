@@ -1,0 +1,5 @@
+--- Gmail SMTP Deep Debug ---
+
+Attempting connection...
+❌ Gmail FAILED: logger[level] is not a function
+Code: undefined
