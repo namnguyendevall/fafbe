@@ -43,8 +43,13 @@ exports.depositZaloPay = async (req, res) => {
         const transID = Math.floor(Math.random() * 1000000);
         const app_trans_id = `${moment().format('YYMMDD')}_${userId}_${transID}`;
 
+        let finalRedirectUrl = redirecturl || config.redirect_url;
+        if (finalRedirectUrl) {
+            finalRedirectUrl += (finalRedirectUrl.includes('?') ? '&' : '?') + `apptransid=${app_trans_id}`;
+        }
+
         const embed_data = JSON.stringify({
-            redirecturl: redirecturl || config.redirect_url
+            redirecturl: finalRedirectUrl
         });
 
         const items = JSON.stringify([
