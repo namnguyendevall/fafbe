@@ -16,7 +16,7 @@ const config = {
 
 exports.depositMomo = async (req, res) => {
     try {
-        const { amount } = req.body;
+        const { amount, redirectUrl } = req.body;
         const userId = req.user.id;
 
         if (!amount || amount <= 0) {
@@ -39,7 +39,8 @@ exports.depositMomo = async (req, res) => {
         const extraData = ""; // optional
 
         // Format raw signature string
-        const rawSignature = `accessKey=${config.accessKey}&amount=${amountVnd}&extraData=${extraData}&ipnUrl=${config.ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${config.partnerCode}&redirectUrl=${config.redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
+        const finalRedirectUrl = redirectUrl || config.redirectUrl;
+        const rawSignature = `accessKey=${config.accessKey}&amount=${amountVnd}&extraData=${extraData}&ipnUrl=${config.ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${config.partnerCode}&redirectUrl=${finalRedirectUrl}&requestId=${requestId}&requestType=${requestType}`;
 
         // Create HMAC SHA256 Signature
         const signature = crypto.createHmac('sha256', config.secretKey)
@@ -55,7 +56,7 @@ exports.depositMomo = async (req, res) => {
             amount: amountVnd,
             orderId: orderId,
             orderInfo: orderInfo,
-            redirectUrl: config.redirectUrl,
+            redirectUrl: finalRedirectUrl,
             ipnUrl: config.ipnUrl,
             lang: "vi",
             requestType: requestType,
@@ -68,7 +69,7 @@ exports.depositMomo = async (req, res) => {
 
         if (result.data && result.data.payUrl) {
             // Optional: You could insert a PENDING transaction here into db before returning
-            return res.json({ payUrl: result.data.payUrl });
+            return res.json({ payUrl: result.data.payUrl, orderId });
         } else {
             console.error("MoMo Create Payment Error:", result.data);
             return res.status(500).json({ message: "Failed to generate MoMo payment URL", data: result.data });
@@ -138,9 +139,9 @@ exports.momoIpn = async (req, res) => {
                     
                     if (walletId) {
                         await client.query(walletSql.createTransaction, [
-                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'MOMO_DEPOSIT', sTransId
+                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'MOMO_DEPOSIT', orderId
                         ]);
-                        console.log('[MOMO IPN] Transaction record created');
+                        console.log('[MOMO IPN] Transaction record created with ref:', orderId);
                     }
                 } else {
                     console.log('[MOMO IPN] Transaction already processed (idempotency)');
@@ -172,5 +173,37 @@ exports.listMyTransactions = async (req, res) => {
     } catch (e) {
         console.error("Error listing transactions:", e);
         return res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+exports.checkStatus = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const userId = req.user.id;
+
+        const result = await pool.query(
+            `SELECT t.status, t.amount 
+             FROM transactions t 
+             JOIN wallets w ON t.wallet_id = w.id 
+             WHERE t.reference_id = $1 
+               AND w.user_id = $2 
+               AND t.reference_type = 'MOMO_DEPOSIT' 
+             ORDER BY t.created_at DESC LIMIT 1`,
+            [orderId, userId]
+        );
+
+        if (result.rows.length > 0) {
+            const trans = result.rows[0];
+            return res.json({ 
+                success: true, 
+                status: trans.status === 'SUCCESS' ? 'done' : 'fail',
+                amount: trans.amount 
+            });
+        }
+
+        return res.json({ success: true, status: 'pending' });
+    } catch (error) {
+        console.error('[MOMO CHECK STATUS] Error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
     }
 };

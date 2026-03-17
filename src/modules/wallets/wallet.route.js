@@ -21,5 +21,7 @@ router.patch('/withdraw/:id/process', authMiddleware, withdrawalController.proce
 
 // ===== Transaction Routes =====
 router.get('/transactions/my', authMiddleware, walletController.listMyTransactions);
+router.get('/check-status/zalopay/:app_trans_id', authMiddleware, zalopayController.checkStatus);
+router.get('/check-status/momo/:orderId', authMiddleware, walletController.checkStatus);
 
 module.exports = router;

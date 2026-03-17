@@ -27,7 +27,7 @@ if (config.key2) {
  */
 exports.depositZaloPay = async (req, res) => {
     try {
-        const { amount } = req.body;
+        const { amount, redirecturl } = req.body;
         const userId = req.user.id;
 
         if (!amount || amount <= 0) {
@@ -44,7 +44,7 @@ exports.depositZaloPay = async (req, res) => {
         const app_trans_id = `${moment().format('YYMMDD')}_${userId}_${transID}`;
 
         const embed_data = JSON.stringify({
-            redirecturl: config.redirect_url
+            redirecturl: redirecturl || config.redirect_url
         });
 
         const items = JSON.stringify([
@@ -76,7 +76,7 @@ exports.depositZaloPay = async (req, res) => {
         const result = await axios.post(config.endpoint, null, { params: order });
 
         if (result.data && result.data.return_code === 1) {
-            return res.json({ order_url: result.data.order_url });
+            return res.json({ order_url: result.data.order_url, app_trans_id });
         } else {
             console.error('ZaloPay Create Order Error:', result.data);
             return res.status(500).json({ message: 'Failed to create ZaloPay order', data: result.data });
@@ -113,7 +113,8 @@ exports.zalopayCallback = async (req, res) => {
             const userId = dataJson.app_user.replace('user_', '').trim();
             const amountVnd = dataJson.amount;
             const pointsToAdd = Math.floor(amountVnd / config.exchangeRate);
-            const transId = dataJson.zp_trans_id.toString();
+            const appTransId = dataJson.app_trans_id; // Use our internal ID as reference
+            const zpTransId = dataJson.zp_trans_id.toString();
 
             console.log(`[ZALOPAY CALLBACK] Processing: UserID="${userId}", Points=${pointsToAdd}, TransId=${transId}`);
 
@@ -149,9 +150,9 @@ exports.zalopayCallback = async (req, res) => {
 
                     if (walletId) {
                         await client.query(walletSql.createTransaction, [
-                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', transId
+                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', appTransId
                         ]);
-                        console.log('[ZALOPAY CALLBACK] Transaction record created');
+                        console.log('[ZALOPAY CALLBACK] Transaction record created with ref:', appTransId);
                     }
                 } else {
                     console.log('[ZALOPAY CALLBACK] Transaction already processed (idempotency)');
@@ -171,4 +172,36 @@ exports.zalopayCallback = async (req, res) => {
     }
 
     return res.json(result);
+};
+
+exports.checkStatus = async (req, res) => {
+    try {
+        const { app_trans_id } = req.params;
+        const userId = req.user.id;
+
+        const result = await pool.query(
+            `SELECT t.status, t.amount 
+             FROM transactions t 
+             JOIN wallets w ON t.wallet_id = w.id 
+             WHERE t.reference_id = $1 
+               AND w.user_id = $2 
+               AND t.reference_type = 'ZALOPAY_DEPOSIT' 
+             ORDER BY t.created_at DESC LIMIT 1`,
+            [app_trans_id, userId]
+        );
+
+        if (result.rows.length > 0) {
+            const trans = result.rows[0];
+            return res.json({ 
+                success: true, 
+                status: trans.status === 'SUCCESS' ? 'done' : 'fail',
+                amount: trans.amount 
+            });
+        }
+
+        return res.json({ success: true, status: 'pending' });
+    } catch (error) {
+        console.error('[ZALOPAY CHECK STATUS] Error:', error);
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
 };
