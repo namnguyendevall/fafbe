@@ -14,14 +14,6 @@ const config = {
     exchangeRate: parseInt(process.env.POINT_EXCHANGE_RATE || '1000', 10)
 };
 
-// reference_id column is INTEGER in DB. Create a stable numeric ID from the ZaloPay string transID
-// e.g. "260308_245_6099638" -> 6099638 (last numeric segment)
-function parseNumericRefId(zptransid) {
-    if (!zptransid) return null;
-    const parts = zptransid.toString().split('_');
-    const lastPart = parseInt(parts[parts.length - 1], 10);
-    return isNaN(lastPart) ? null : lastPart;
-}
 
 /**
  * ZaloPay Order Creation
@@ -106,8 +98,6 @@ exports.zalopayCallback = async (req, res) => {
             const amountVnd = dataJson.amount;
             const pointsToAdd = Math.floor(amountVnd / config.exchangeRate);
             const transId = dataJson.zp_trans_id.toString();
-            const numericRefId = parseNumericRefId(transId);
-            if (!numericRefId) throw new Error('Invalid zp_trans_id format');
 
             const client = await pool.connect();
             try {
@@ -116,7 +106,7 @@ exports.zalopayCallback = async (req, res) => {
                 // Idempotency check
                 const existing = await client.query(
                     'SELECT id FROM transactions WHERE reference_id = $1 AND reference_type = $2',
-                    [numericRefId, 'ZALOPAY_DEPOSIT']
+                    [transId, 'ZALOPAY_DEPOSIT']
                 );
 
                 if (existing.rows.length === 0) {
@@ -127,7 +117,7 @@ exports.zalopayCallback = async (req, res) => {
 
                     if (walletId) {
                         await client.query(walletSql.createTransaction, [
-                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', numericRefId
+                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', transId
                         ]);
                     }
                 }
