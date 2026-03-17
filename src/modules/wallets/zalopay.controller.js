@@ -5,12 +5,12 @@ const walletSql = require('./wallet.sql');
 const moment = require('moment');
 
 const config = {
-    app_id: process.env.ZALOPAY_APP_ID,
-    key1: process.env.ZALOPAY_KEY1,
-    key2: process.env.ZALOPAY_KEY2,
-    endpoint: process.env.ZALOPAY_ENDPOINT || 'https://sb-openapi.zalopay.vn/v2/create',
-    callback_url: process.env.ZALOPAY_CALLBACK_URL,
-    redirect_url: process.env.ZALOPAY_REDIRECT_URL,
+    app_id: process.env.ZALOPAY_APP_ID?.replace(/"/g, '').trim(),
+    key1: process.env.ZALOPAY_KEY1?.replace(/"/g, '').trim(),
+    key2: process.env.ZALOPAY_KEY2?.replace(/"/g, '').trim(),
+    endpoint: process.env.ZALOPAY_ENDPOINT?.replace(/"/g, '').trim() || 'https://sb-openapi.zalopay.vn/v2/create',
+    callback_url: process.env.ZALOPAY_CALLBACK_URL?.replace(/"/g, '').trim(),
+    redirect_url: process.env.ZALOPAY_REDIRECT_URL?.replace(/"/g, '').trim(),
     exchangeRate: parseInt(process.env.POINT_EXCHANGE_RATE || '1000', 10)
 };
 

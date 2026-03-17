@@ -5,13 +5,13 @@ const walletSql = require('./wallet.sql');
 
 // Env configurations
 const config = {
-    partnerCode: process.env.MOMO_PARTNER_CODE,
-    accessKey: process.env.MOMO_ACCESS_KEY,
-    secretKey: process.env.MOMO_SECRET_KEY,
-    endpoint: process.env.MOMO_ENDPOINT,
-    redirectUrl: process.env.MOMO_REDIRECT_URL,
-    ipnUrl: process.env.MOMO_IPN_URL,
-    exchangeRate: parseInt(process.env.POINT_EXCHANGE_RATE || "1", 10)
+    partnerCode: process.env.MOMO_PARTNER_CODE?.replace(/"/g, '').trim(),
+    accessKey: process.env.MOMO_ACCESS_KEY?.replace(/"/g, '').trim(),
+    secretKey: process.env.MOMO_SECRET_KEY?.replace(/"/g, '').trim(),
+    endpoint: process.env.MOMO_ENDPOINT?.replace(/"/g, '').trim(),
+    redirectUrl: process.env.MOMO_REDIRECT_URL?.replace(/"/g, '').trim(),
+    ipnUrl: process.env.MOMO_IPN_URL?.replace(/"/g, '').trim(),
+    exchangeRate: parseInt(process.env.POINT_EXCHANGE_RATE || "1000", 10)
 };
 
 exports.depositMomo = async (req, res) => {
