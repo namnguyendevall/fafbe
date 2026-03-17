@@ -41,8 +41,11 @@ exports.requestWithdrawal = async (req, res) => {
         const withdrawal = withdrawalRes.rows[0];
 
         // 4. Create Transaction Log (PENDING)
+        const method = bank_info.method === 'momo' ? 'MoMo' : 'Ngân hàng';
+        const description = `Rút ${amount} CRED qua ${method}`;
+        
         await client.query(walletSql.createTransaction, [
-            wallet.id, 'WITHDRAW', amount, 'PENDING', 'WITHDRAWAL_REQUEST', withdrawal.id
+            wallet.id, 'WITHDRAW', amount, 'PENDING', 'WITHDRAWAL_REQUEST', withdrawal.id, description
         ]);
 
         await client.query('COMMIT');
