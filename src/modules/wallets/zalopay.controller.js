@@ -1,4 +1,4 @@
-const CryptoJS = require('crypto-js');
+const crypto = require('crypto');
 const axios = require('axios');
 const pool = require('../../config/database');
 const walletSql = require('./wallet.sql');
@@ -13,6 +13,13 @@ const config = {
     redirect_url: process.env.ZALOPAY_REDIRECT_URL,
     exchangeRate: parseInt(process.env.POINT_EXCHANGE_RATE || '1000', 10)
 };
+
+console.log('[ZALOPAY CONFIG] APP_ID:', config.app_id);
+console.log('[ZALOPAY CONFIG] KEY1 Length:', config.key1?.length);
+console.log('[ZALOPAY CONFIG] KEY2 Length:', config.key2?.length);
+if (config.key2) {
+    console.log('[ZALOPAY CONFIG] KEY2 Start/End:', config.key2.substring(0, 3) + '...' + config.key2.substring(config.key2.length - 3));
+}
 
 
 /**
@@ -64,7 +71,7 @@ exports.depositZaloPay = async (req, res) => {
 
         // Build MAC Signature: app_id|app_trans_id|app_user|amount|app_time|embed_data|item
         const data = `${order.app_id}|${order.app_trans_id}|${order.app_user}|${order.amount}|${order.app_time}|${order.embed_data}|${order.item}`;
-        order.mac = CryptoJS.HmacSHA256(data, config.key1).toString();
+        order.mac = crypto.createHmac('sha256', config.key1).update(data).digest('hex');
 
         const result = await axios.post(config.endpoint, null, { params: order });
 
@@ -87,7 +94,7 @@ exports.zalopayCallback = async (req, res) => {
         console.log('[ZALOPAY CALLBACK] Received body:', JSON.stringify(req.body));
 
         // Verify signature
-        const mac = CryptoJS.HmacSHA256(dataStr, config.key2).toString();
+        const mac = crypto.createHmac('sha256', config.key2).update(dataStr).digest('hex');
         console.log('[ZALOPAY CALLBACK] Expected MAC:', mac);
         console.log('[ZALOPAY CALLBACK] Request MAC:', reqMac);
 
