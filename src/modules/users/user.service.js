@@ -129,6 +129,11 @@ exports.getFeaturedWorkers = async (limit = 10) => {
   return rows;
 };
 
+exports.getTopTalents = async (limit = 10) => {
+    const { rows } = await pool.query(sql.getTopTalents, [limit]);
+    return rows;
+};
+
 exports.updateUserTier = async (client, userId) => {
     // 1. Get current stats
     const { rows } = await client.query('SELECT rating_avg, total_jobs_done FROM user_profiles WHERE user_id = $1', [userId]);

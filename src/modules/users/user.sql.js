@@ -178,5 +178,21 @@ GROUP BY u.id, u.email, u.role, u.status,
     DELETE FROM user_followers
     WHERE follower_id = $1 AND following_id = $2
     RETURNING *
+  `,
+
+  getTopTalents: `
+    SELECT u.id, u.email,
+           p.full_name, p.avatar_url, p.bio,
+           p.skills, p.location, p.hourly_rate,
+           p.rating_avg, p.total_jobs_done, p.tier,
+           COALESCE(SUM(t.amount), 0) as total_earnings
+    FROM users u
+    JOIN user_profiles p ON p.user_id = u.id
+    LEFT JOIN wallets w ON w.user_id = u.id
+    LEFT JOIN transactions t ON t.wallet_id = w.id AND t.type = 'RELEASE' AND t.status = 'SUCCESS'
+    WHERE u.role = 'worker' AND u.status = 'active'
+    GROUP BY u.id, p.full_name, p.avatar_url, p.bio, p.skills, p.location, p.hourly_rate, p.rating_avg, p.total_jobs_done, p.tier
+    ORDER BY p.rating_avg DESC NULLS LAST, total_earnings DESC
+    LIMIT $1
   `
 };

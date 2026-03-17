@@ -62,6 +62,26 @@ r.get('/featured', auth, c.getFeaturedWorkers);
 
 /**
  * @swagger
+ * /api/users/top-talents:
+ *   get:
+ *     summary: Get top 10 talents (highest rating & earnings)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *     responses:
+ *       200:
+ *         description: List of top talents
+ */
+r.get('/top-talents', auth, c.getTopTalents);
+
+/**
+ * @swagger
  * /api/users/{id}:
  *   get:
  *     summary: Get public profile of a user

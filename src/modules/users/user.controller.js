@@ -44,6 +44,17 @@ exports.getFeaturedWorkers = async (req, res) => {
   }
 };
 
+exports.getTopTalents = async (req, res) => {
+    try {
+        const limit = Number(req.query.limit || 10);
+        const talents = await s.getTopTalents(limit);
+        res.json(talents);
+    } catch (error) {
+        console.error('Error in getTopTalents controller:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 exports.getPublicProfile = async (req, res) => {
   const profile = await s.getPublicProfile(req.params.id);
   if (!profile) return res.status(404).json({ message: "User not found" });
