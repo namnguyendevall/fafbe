@@ -121,7 +121,7 @@ exports.zalopayCallback = async (req, res) => {
             const appTransId = dataJson.app_trans_id; // Use our internal ID as reference
             const zpTransId = dataJson.zp_trans_id.toString();
 
-            console.log(`[ZALOPAY CALLBACK] Processing: UserID="${userId}", Points=${pointsToAdd}, TransId=${transId}`);
+            console.log(`[ZALOPAY CALLBACK] Processing: UserID="${userId}", Points=${pointsToAdd}, AppTransId=${appTransId}, ZpTransId=${zpTransId}`);
 
             const client = await pool.connect();
             try {
@@ -129,7 +129,7 @@ exports.zalopayCallback = async (req, res) => {
 
                 const existing = await client.query(
                     'SELECT id FROM transactions WHERE reference_id = $1 AND reference_type = $2',
-                    [transId, 'ZALOPAY_DEPOSIT']
+                    [appTransId, 'ZALOPAY_DEPOSIT']
                 );
 
                 if (existing.rows.length === 0) {
