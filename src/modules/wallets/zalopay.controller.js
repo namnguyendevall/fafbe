@@ -24,83 +24,8 @@ function parseNumericRefId(zptransid) {
 }
 
 /**
- * Dev/test workaround: when ZaloPay can't reach localhost for callback,
- * DepositResult.jsx calls this endpoint after detecting a successful redirect.
- * In production this should NOT exist - rely on callback only.
+ * ZaloPay Order Creation
  */
-exports.creditAfterRedirect = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const { amount, zptransid } = req.body;
-        
-        console.log('ZaloPay creditAfterRedirect request:', { userId, amount, zptransid });
-
-        if (!amount || !zptransid) {
-            return res.status(400).json({ message: 'Missing amount or transaction id' });
-        }
-
-        const pointsToAdd = Math.floor(amount / config.exchangeRate);
-        
-        // ZaloPay redirect may send apptransid (our string) or zptransid (their numeric string)
-        // If it's our string format 'YYMMDD_USERID_RAND', we extract the RAND part.
-        // If it's just a long numeric string, we treat it as the numeric ID directly.
-        let numericRefId;
-        if (zptransid.toString().includes('_')) {
-            numericRefId = parseNumericRefId(zptransid);
-        } else {
-            numericRefId = parseInt(zptransid, 10);
-            if (isNaN(numericRefId)) numericRefId = null;
-        }
-
-        if (!numericRefId) {
-            console.error('Invalid transaction id format:', zptransid);
-            return res.status(400).json({ message: 'Invalid transaction id format' });
-        }
-        const client = await pool.connect();
-        try {
-            await client.query('BEGIN');
-
-            // Idempotency: skip if already processed
-            const existing = await client.query(
-                'SELECT id FROM transactions WHERE reference_id = $1 AND reference_type = $2',
-                [numericRefId, 'ZALOPAY_DEPOSIT']
-            );
-
-            if (existing.rows.length > 0) {
-                await client.query('ROLLBACK');
-                return res.json({ message: 'Already credited', skipped: true });
-            }
-
-            await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
-
-            const walletRes = await client.query(walletSql.getByUserId, [userId]);
-            const walletId = walletRes.rows[0]?.id;
-            if (walletId) {
-                await client.query(walletSql.createTransaction, [
-                    walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', numericRefId
-                ]);
-            }
-
-            await client.query('COMMIT');
-            return res.json({ message: 'Credited successfully', points: pointsToAdd });
-        } catch (err) {
-            await client.query('ROLLBACK');
-            console.error('creditAfterRedirect DB error details:', {
-                message: err.message,
-                detail: err.detail,
-                code: err.code,
-                stack: err.stack
-            });
-            return res.status(500).json({ message: 'DB error', details: err.message });
-        } finally {
-            client.release();
-        }
-    } catch (e) {
-        console.error('creditAfterRedirect error:', e);
-        return res.status(500).json({ message: 'Internal server error' });
-    }
-};
-
 exports.depositZaloPay = async (req, res) => {
     try {
         const { amount } = req.body;

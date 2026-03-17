@@ -12,8 +12,6 @@ router.post('/deposit/momo/ipn', walletController.momoIpn);
 // ===== ZaloPay Routes =====
 router.post('/deposit/zalopay', authMiddleware, zalopayController.depositZaloPay);
 router.post('/deposit/zalopay/callback', zalopayController.zalopayCallback);
-// Dev/test endpoint: credits user after successful ZaloPay redirect (bypasses callback)
-router.post('/deposit/zalopay/credit-redirect', authMiddleware, zalopayController.creditAfterRedirect);
 
 // ===== Withdrawal Routes =====
 router.post('/withdraw/request', authMiddleware, withdrawalController.requestWithdrawal);
