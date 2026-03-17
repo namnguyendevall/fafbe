@@ -46,8 +46,8 @@ module.exports = {
   `,
 
   createTransaction: `
-    INSERT INTO transactions (wallet_id, type, amount, status, reference_type, reference_id, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    INSERT INTO transactions (wallet_id, type, amount, status, reference_type, reference_id, description, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
     RETURNING *
   `,
 

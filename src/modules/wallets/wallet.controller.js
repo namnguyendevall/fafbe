@@ -138,8 +138,9 @@ exports.momoIpn = async (req, res) => {
                     const walletId = walletRes.rows[0]?.id;
                     
                     if (walletId) {
+                        const description = `Nạp ${pointsToAdd} CRED qua MoMo`;
                         await client.query(walletSql.createTransaction, [
-                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'MOMO_DEPOSIT', orderId
+                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'MOMO_DEPOSIT', orderId, description
                         ]);
                         console.log('[MOMO IPN] Transaction record created with ref:', orderId);
                     }

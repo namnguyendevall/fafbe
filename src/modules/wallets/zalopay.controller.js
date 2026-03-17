@@ -154,8 +154,9 @@ exports.zalopayCallback = async (req, res) => {
                     const walletId = walletRes.rows[0]?.id;
 
                     if (walletId) {
+                        const description = `Nạp ${pointsToAdd} CRED qua ZaloPay`;
                         await client.query(walletSql.createTransaction, [
-                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', appTransId
+                            walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', appTransId, description
                         ]);
                         console.log('[ZALOPAY CALLBACK] Transaction record created with ref:', appTransId);
                     }
