@@ -108,17 +108,30 @@ exports.momoIpn = async (req, res) => {
                 await client.query('BEGIN');
 
                 const parts = orderId.split('_');
-                const userId = parts[1];
+                const userId = parts[1].trim();
                 const pointsToAdd = Math.floor(amount / config.exchangeRate);
                 const sTransId = transId.toString();
 
-                console.log(`[MOMO IPN] Processing: User=${userId}, Points=${pointsToAdd}, TransId=${sTransId}`);
+                console.log(`[MOMO IPN] Processing: UserID="${userId}", Points=${pointsToAdd}, TransId=${sTransId}`);
 
                 const txCheck = await client.query('SELECT id FROM transactions WHERE reference_id = $1 AND reference_type = $2', [sTransId, 'MOMO_DEPOSIT']);
                 
                 if (txCheck.rows.length === 0) {
-                    const updateRes = await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
-                    console.log('[MOMO IPN] Balance update result:', updateRes.rowCount > 0 ? 'SUCCESS' : 'FAILED (User matching issue?)');
+                    let updateRes = await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
+                    
+                    if (updateRes.rowCount === 0) {
+                        console.log(`[MOMO IPN] No wallet found for user ${userId}, attempting to create...`);
+                        const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+                        if (userCheck.rows.length > 0) {
+                            await client.query('INSERT INTO wallets (user_id, balance_points) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET balance_points = wallets.balance_points + $2', [userId, pointsToAdd]);
+                            console.log(`[MOMO IPN] Wallet created/updated for user ${userId}`);
+                        } else {
+                            console.error(`[MOMO IPN] User ${userId} NOT found in database!`);
+                            throw new Error(`User ${userId} does not exist`);
+                        }
+                    } else {
+                        console.log(`[MOMO IPN] Balance updated for user ${userId}`);
+                    }
 
                     const walletRes = await client.query(walletSql.getByUserId, [userId]);
                     const walletId = walletRes.rows[0]?.id;
@@ -128,8 +141,6 @@ exports.momoIpn = async (req, res) => {
                             walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'MOMO_DEPOSIT', sTransId
                         ]);
                         console.log('[MOMO IPN] Transaction record created');
-                    } else {
-                        console.error('[MOMO IPN] Wallet NOT found for user_', userId);
                     }
                 } else {
                     console.log('[MOMO IPN] Transaction already processed (idempotency)');

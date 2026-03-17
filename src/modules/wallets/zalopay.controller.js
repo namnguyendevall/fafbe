@@ -98,12 +98,12 @@ exports.zalopayCallback = async (req, res) => {
             const dataJson = JSON.parse(dataStr);
             console.log('[ZALOPAY CALLBACK] Data JSON:', JSON.stringify(dataJson));
 
-            const userId = dataJson.app_user.replace('user_', '');
+            const userId = dataJson.app_user.replace('user_', '').trim();
             const amountVnd = dataJson.amount;
             const pointsToAdd = Math.floor(amountVnd / config.exchangeRate);
             const transId = dataJson.zp_trans_id.toString();
 
-            console.log(`[ZALOPAY CALLBACK] Processing: User=${userId}, Points=${pointsToAdd}, TransId=${transId}`);
+            console.log(`[ZALOPAY CALLBACK] Processing: UserID="${userId}", Points=${pointsToAdd}, TransId=${transId}`);
 
             const client = await pool.connect();
             try {
@@ -115,8 +115,22 @@ exports.zalopayCallback = async (req, res) => {
                 );
 
                 if (existing.rows.length === 0) {
-                    const updateRes = await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
-                    console.log('[ZALOPAY CALLBACK] Balance update result:', updateRes.rowCount > 0 ? 'SUCCESS' : 'FAILED (User matching issue?)');
+                    let updateRes = await client.query(walletSql.updateBalance, [userId, pointsToAdd]);
+                    
+                    if (updateRes.rowCount === 0) {
+                        console.log(`[ZALOPAY CALLBACK] No wallet found for user ${userId}, attempting to create...`);
+                        // Ensure user exists before creating wallet
+                        const userCheck = await client.query('SELECT id FROM users WHERE id = $1', [userId]);
+                        if (userCheck.rows.length > 0) {
+                            await client.query('INSERT INTO wallets (user_id, balance_points) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET balance_points = wallets.balance_points + $2', [userId, pointsToAdd]);
+                            console.log(`[ZALOPAY CALLBACK] Wallet created/updated for user ${userId}`);
+                        } else {
+                            console.error(`[ZALOPAY CALLBACK] User ${userId} NOT found in database!`);
+                            throw new Error(`User ${userId} does not exist`);
+                        }
+                    } else {
+                        console.log(`[ZALOPAY CALLBACK] Balance updated for user ${userId}`);
+                    }
 
                     const walletRes = await client.query(walletSql.getByUserId, [userId]);
                     const walletId = walletRes.rows[0]?.id;
@@ -126,8 +140,6 @@ exports.zalopayCallback = async (req, res) => {
                             walletId, 'DEPOSIT', pointsToAdd, 'SUCCESS', 'ZALOPAY_DEPOSIT', transId
                         ]);
                         console.log('[ZALOPAY CALLBACK] Transaction record created');
-                    } else {
-                        console.error('[ZALOPAY CALLBACK] Wallet NOT found for user_', userId);
                     }
                 } else {
                     console.log('[ZALOPAY CALLBACK] Transaction already processed (idempotency)');
