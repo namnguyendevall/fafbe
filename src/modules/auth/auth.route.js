@@ -3,6 +3,11 @@ const router = require('express').Router();
 const c = require('./auth.controller');
 
 
+const authMiddleware = require('../../middlewares/auth.middleware');
+
+router.get('/test-route', (req, res) => res.json({ message: 'Auth route is working' }));
+router.post('/change-password', authMiddleware, c.changePassword);
+
 /**
  * @swagger
  * tags:
@@ -184,7 +189,6 @@ router.post('/forgot-password', c.forgotPassword);
  */
 router.post('/reset-password', c.resetPassword);
 
-const auth = require('../../middlewares/auth.middleware');
-router.post('/change-password', auth, c.changePassword);
+// router.post('/reset-password', c.resetPassword);
 
 module.exports = router;
