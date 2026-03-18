@@ -64,4 +64,17 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+exports.changePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: 'Old and new passwords required' });
+    }
+    await service.changePassword(req.user.id, oldPassword, newPassword);
+    res.json({ message: 'Password changed successfully' });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+};
+
 

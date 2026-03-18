@@ -184,4 +184,7 @@ router.post('/forgot-password', c.forgotPassword);
  */
 router.post('/reset-password', c.resetPassword);
 
+const auth = require('../../middlewares/auth.middleware');
+router.post('/change-password', auth, c.changePassword);
+
 module.exports = router;

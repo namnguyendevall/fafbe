@@ -201,3 +201,15 @@ exports.resetPassword = async (email, otp, newPassword) => {
   await pool.query(sql.updatePassword, [email, hash]);
   await pool.query(sql.markOtpUsed, [rows[0].id]);
 };
+
+exports.changePassword = async (userId, oldPassword, newPassword) => {
+    const { rows } = await pool.query('SELECT email, password_hash FROM users WHERE id = $1', [userId]);
+    if (!rows.length) throw new Error('User not found');
+
+    const user = rows[0];
+    const match = await bcrypt.compare(oldPassword, user.password_hash);
+    if (!match) throw new Error('Wrong old password');
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query(sql.updatePassword, [user.email, hash]);
+};
