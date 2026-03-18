@@ -30,12 +30,12 @@ exports.releaseCheckpointFunds = async (client, { clientId, workerId, amount, re
 
     // Client transaction (Full amount release)
     await client.query(sql.createTransaction, [
-        clientWallet.id, 'RELEASE', amount, 'SUCCESS', referenceType, referenceId
+        clientWallet.id, 'RELEASE', amount, 'SUCCESS', referenceType, referenceId, `Release funds for ${referenceType} ${referenceId}`
     ]);
 
     // Worker transaction (Payout amount)
     await client.query(sql.createTransaction, [
-        workerWallet.id, 'RELEASE', payout, 'SUCCESS', referenceType, referenceId
+        workerWallet.id, 'RELEASE', payout, 'SUCCESS', referenceType, referenceId, `Receive payout for ${referenceType} ${referenceId} (Fee: ${fee})`
     ]);
 
     return { payout, fee };
@@ -50,7 +50,7 @@ exports.refundLockedFunds = async (client, { userId, amount, referenceId, refere
 
     const wallet = await exports.getWallet(client, userId);
     await client.query(sql.createTransaction, [
-        wallet.id, 'REFUND', amount, 'SUCCESS', referenceType, referenceId
+        wallet.id, 'REFUND', amount, 'SUCCESS', referenceType, referenceId, `Refund for ${referenceType} ${referenceId}`
     ]);
 
     return updateRes.rows[0];
@@ -76,7 +76,7 @@ exports.lockBudget = async (client, { userId, amount, referenceId, referenceType
     }
 
     await client.query(sql.createTransaction, [
-        wallet.id, 'LOCK', amount, 'SUCCESS', referenceType, referenceId
+        wallet.id, 'LOCK', amount, 'SUCCESS', referenceType, referenceId, `Lock budget for ${referenceType} ${referenceId}`
     ]);
 
     return updateRes.rows[0];

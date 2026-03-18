@@ -85,10 +85,10 @@ exports.processRequest = async (req, res) => {
         }
 
         const { id } = req.params;
-        const { status, admin_note } = req.body; // APPROVED or REJECTED
+        const { status, admin_note, proof_image_url } = req.body; // APPROVED or REJECTED
 
         if (!['APPROVED', 'REJECTED'].includes(status)) {
-            return res.status(400).json({ message: "Trạng thái không hợp lệ" });
+            return res.status(400).json({ message: `Trạng thái không hợp lệ: ${status}` });
         }
 
         await client.query('BEGIN');
@@ -98,10 +98,23 @@ exports.processRequest = async (req, res) => {
         const request = requestRes.rows[0];
 
         if (!request) throw new Error("REQUEST_NOT_FOUND");
-        if (request.status !== 'PENDING') throw new Error("ALREADY_PROCESSED");
+        
+        // If already processed, we only allow updating notes/proof if the status is the same
+        if (request.status !== 'PENDING') {
+            if (request.status === status) {
+                // Just update the note and proof image
+                await client.query(
+                    'UPDATE withdrawal_requests SET admin_note = $2, proof_image_url = $3, updated_at = NOW() WHERE id = $1',
+                    [id, admin_note || request.admin_note, proof_image_url || request.proof_image_url]
+                );
+                await client.query('COMMIT');
+                return res.json({ message: "Cập nhật ghi chú và minh chứng thành công" });
+            }
+            throw new Error("ALREADY_PROCESSED");
+        }
 
-        // 2. Update Status
-        await client.query(walletSql.updateWithdrawalStatus, [id, status, admin_note || '']);
+        // 2. Update Status (Normal Pending -> Processed flow)
+        await client.query(walletSql.updateWithdrawalStatus, [id, status, admin_note || '', proof_image_url || null]);
 
         // 3. Update Transaction Log & Wallet if REJECTED
         const walletRes = await client.query(walletSql.getByUserId, [request.user_id]);
@@ -138,7 +151,7 @@ exports.processRequest = async (req, res) => {
         if (client) await client.query('ROLLBACK');
         console.error("DEBUG ERROR processRequest:", e);
         if (e.message === "REQUEST_NOT_FOUND") return res.status(404).json({ message: "Yêu cầu không tồn tại" });
-        if (e.message === "ALREADY_PROCESSED") return res.status(400).json({ message: "Yêu cầu đã được xử lý trước đó" });
+        if (e.message === "ALREADY_PROCESSED") return res.status(400).json({ message: "Yêu cầu đã được xử lý trước đó hoặc không còn ở trạng thái PENDING" });
         return res.status(500).json({ message: e.message || "Internal server error" });
     } finally {
         if (client) client.release();

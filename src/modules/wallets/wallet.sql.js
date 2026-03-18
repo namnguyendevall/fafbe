@@ -58,9 +58,10 @@ module.exports = {
   `,
 
   listWithdrawalRequests: `
-    SELECT wr.*, u.email as user_email
+    SELECT wr.*, u.email as user_email, p.full_name
     FROM withdrawal_requests wr
     JOIN users u ON wr.user_id = u.id
+    LEFT JOIN user_profiles p ON p.user_id = u.id
     ORDER BY wr.created_at DESC
   `,
 
@@ -70,7 +71,7 @@ module.exports = {
 
   updateWithdrawalStatus: `
     UPDATE withdrawal_requests 
-    SET status = $2, admin_note = $3, updated_at = NOW()
+    SET status = $2, admin_note = $3, proof_image_url = $4, updated_at = NOW()
     WHERE id = $1
     RETURNING *
   `,
