@@ -1,4 +1,5 @@
 const s = require("./chat.service");
+const notificationService = require("../notifications/notification.service");
 
 exports.getConversations = async (req, res) => {
     try {
@@ -48,6 +49,25 @@ exports.sendMessage = async (req, res) => {
         const io = req.app.get('io');
         if (io) {
             io.to(`conversation_${id}`).emit('receive_message', message);
+            
+            // Create Notifications for other participants
+            try {
+                const participants = await s.getParticipants(id);
+                for (const p of participants) {
+                    if (p.user_id !== req.user.id) {
+                        await notificationService.createNotification({
+                            userId: p.user_id,
+                            type: 'NEW_MESSAGE',
+                            title: 'New Message',
+                            message: `You have a new message`,
+                            data: { conversationId: id, messageId: message.id },
+                            io
+                        });
+                    }
+                }
+            } catch (notifyErr) {
+                console.error("Notification failed in HTTP sendMessage:", notifyErr);
+            }
         }
         
         return res.json({ data: message });
