@@ -67,4 +67,19 @@ router.get('/:id/messages', auth, controller.getMessages);
  */
 router.post('/start', auth, controller.startChat);
 
+/**
+ * @swagger
+ * /api/chat/{id}/messages:
+ *   post:
+ *     summary: Send a message via HTTP
+ *     tags: [Chat]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+router.post('/:id/messages', auth, controller.sendMessage);
+
 module.exports = router;
