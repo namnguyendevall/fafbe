@@ -206,3 +206,44 @@ exports.resolve = async (req, res) => {
         return res.status(500).json({ message: "Internal server error", error: e.message });
     }
 };
+
+exports.employerResolve = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { action } = req.body; // 'CONCEDE' or 'ESCALATE'
+        
+        const dispute = await s.getDispute(id, req.user.id);
+        if (!dispute) return res.status(404).json({ message: "Dispute not found or unauthorized" });
+
+        const { rows: contractData } = await require('../../config/database').query(`
+            SELECT client_id FROM contracts WHERE id = $1
+        `, [dispute.contract_id]);
+
+        if (contractData[0]?.client_id !== req.user.id) {
+            return res.status(403).json({ message: "Only the Employer can resolve their own dispute phase." });
+        }
+
+        const io = req.app.get('io');
+        if (action === 'CONCEDE') {
+            const result = await s.resolveDispute({
+                disputeId: id,
+                resolution: 'WORKER_WINS',
+                adminId: null,
+                io,
+                resolutionSummary: 'Employer conceded the dispute.'
+            });
+            return res.json({ message: "Dispute resolved by concession", data: result });
+        } else if (action === 'ESCALATE') {
+            await require('../../config/database').query(`
+                UPDATE disputes SET employer_resolution_deadline = NULL, updated_at = NOW() WHERE id = $1
+            `, [id]);
+            
+            return res.json({ message: "Dispute escalated to Manager. Auto-resolution cancelled." });
+        }
+
+        return res.status(400).json({ message: "Invalid action" });
+    } catch (e) {
+        console.error(e);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};

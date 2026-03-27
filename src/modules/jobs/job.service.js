@@ -107,9 +107,9 @@ async function createJobWithContractAndCheckpoints({
         `
         INSERT INTO checkpoints (
           contract_id, title, description,
-          amount, due_date, duration_days, status, created_at
+          amount, due_date, duration_days, rework_limit, status, created_at
         )
-        VALUES ($1, $2, $3, $4, null, $5, 'PENDING', NOW())
+        VALUES ($1, $2, $3, $4, null, $5, 3, 'PENDING', NOW())
         RETURNING *
         `,
         [contract.id, cp.title, cp.description || null, cp.amount, cp.duration_days || 7],
@@ -195,13 +195,26 @@ async function getJobById(jobId, requestingUser = null) {
              'role', u.role,
              'created_at', u.created_at
            ) AS client,
-           (SELECT json_build_object(
+            (SELECT json_build_object(
               'id', ct.id,
               'total_amount', ct.total_amount,
               'status', ct.status,
               'terms', ct.contract_content,
               'created_at', ct.created_at
-            ) FROM contracts ct WHERE ct.job_id = j.id LIMIT 1) AS contract,
+            ) FROM contracts ct 
+            WHERE ct.job_id = j.id 
+            ORDER BY 
+              CASE 
+                WHEN ct.status = 'ACTIVE' THEN 1
+                WHEN ct.status = 'DISPUTED' THEN 2
+                WHEN (ct.status = 'COMPLETED' OR ct.status = 'TERMINATED') 
+                     AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.contract_id = ct.id AND r.reviewer_id = $2) THEN 3
+                WHEN ct.status = 'DRAFT' AND ct.worker_id IS NOT NULL THEN 4
+                WHEN ct.status = 'DRAFT' THEN 5
+                WHEN ct.status = 'COMPLETED' OR ct.status = 'TERMINATED' THEN 6
+                ELSE 7
+              END ASC,
+              ct.created_at DESC LIMIT 1) AS contract,
            (SELECT COALESCE(json_agg(
               json_build_object(
                 'id', cp.id,
@@ -214,8 +227,22 @@ async function getJobById(jobId, requestingUser = null) {
                 'submission_notes', cp.submission_notes
               ) ORDER BY cp.created_at ASC
             ), '[]') FROM checkpoints cp 
-            JOIN contracts ct ON cp.contract_id = ct.id 
-            WHERE ct.job_id = j.id) AS checkpoints,
+            WHERE cp.contract_id = (
+              SELECT id FROM contracts 
+              WHERE job_id = j.id 
+              ORDER BY 
+                CASE 
+                  WHEN status = 'ACTIVE' THEN 1
+                  WHEN status = 'DISPUTED' THEN 2
+                  WHEN (status = 'COMPLETED' OR status = 'TERMINATED') 
+                       AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.contract_id = id AND r.reviewer_id = $2) THEN 3
+                  WHEN status = 'DRAFT' AND worker_id IS NOT NULL THEN 4
+                  WHEN status = 'DRAFT' THEN 5
+                  WHEN status = 'COMPLETED' OR status = 'TERMINATED' THEN 6
+                  ELSE 7
+                END ASC,
+                created_at DESC LIMIT 1
+            )) AS checkpoints,
            (SELECT d.id FROM disputes d JOIN contracts ct_dis ON d.contract_id = ct_dis.id WHERE ct_dis.job_id = j.id AND d.status = 'OPEN' LIMIT 1) AS dispute_id,
            COALESCE(
              json_agg(
@@ -236,7 +263,7 @@ async function getJobById(jobId, requestingUser = null) {
     WHERE j.id = $1
     GROUP BY j.id, c.name, u.id, u.email, u.role, u.created_at, up.full_name
     `,
-    [jobId],
+    [jobId, requestingUser?.id || null],
   );
 
   const job = rows[0];

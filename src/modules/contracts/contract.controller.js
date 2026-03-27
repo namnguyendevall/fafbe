@@ -289,7 +289,7 @@ exports.terminateContract = async (req, res) => {
         const { id } = req.params;
         const result = await s.terminateContract({
             contractId: id,
-            clientId: req.user.id
+            userId: req.user.id
         });
         
         // Notify Worker

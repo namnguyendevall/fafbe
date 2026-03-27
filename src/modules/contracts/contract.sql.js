@@ -5,7 +5,8 @@ module.exports = {
            j.start_date as job_start_date,
            j.end_date as job_end_date,
            client.full_name as client_name,
-           worker.full_name as worker_name
+           worker.full_name as worker_name,
+           (SELECT id FROM disputes WHERE contract_id = c.id AND status = 'OPEN' ORDER BY created_at DESC LIMIT 1) as dispute_id
     FROM contracts c
     JOIN jobs j ON j.id = c.job_id
     LEFT JOIN user_profiles client ON client.user_id = c.client_id
@@ -39,15 +40,15 @@ module.exports = {
            j.title as job_title,
            j.description as job_description,
            j.start_date as job_start_date,
-           j.end_date as job_end_date,
            client.full_name as client_name,
-           worker.full_name as worker_name
+           worker.full_name as worker_name,
+           (SELECT id FROM disputes WHERE contract_id = c.id AND status = 'OPEN' ORDER BY created_at DESC LIMIT 1) as dispute_id
     FROM contracts c
     JOIN jobs j ON j.id = c.job_id
     LEFT JOIN user_profiles client ON client.user_id = c.client_id
     LEFT JOIN user_profiles worker ON worker.user_id = c.worker_id
     WHERE c.worker_id = $1 
-      AND c.status NOT IN ('COMPLETED', 'CANCELLED')
+      AND c.status NOT IN ('COMPLETED', 'CANCELLED', 'TERMINATED')
     ORDER BY 
       CASE 
         WHEN c.status = 'ACTIVE' THEN 0 
@@ -63,14 +64,21 @@ module.exports = {
            j.title as job_title,
            j.description as job_description,
            j.start_date as job_start_date,
-           j.end_date as job_end_date,
            client.full_name as client_name,
-           worker.full_name as worker_name
+           worker.full_name as worker_name,
+           (SELECT id FROM disputes WHERE contract_id = c.id AND status = 'OPEN' ORDER BY created_at DESC LIMIT 1) as dispute_id
     FROM contracts c
     JOIN jobs j ON j.id = c.job_id
     LEFT JOIN user_profiles client ON client.user_id = c.client_id
     LEFT JOIN user_profiles worker ON worker.user_id = c.worker_id
     WHERE c.job_id = $1 AND c.worker_id = $2
+    ORDER BY 
+      CASE 
+        WHEN c.status = 'ACTIVE' THEN 0 
+        WHEN c.status = 'DRAFT' THEN 1
+        ELSE 2 
+      END,
+      c.created_at DESC
     LIMIT 1
   `,
 
@@ -91,9 +99,11 @@ module.exports = {
   `,
 
   getCheckpointsByContract: `
-    SELECT * FROM checkpoints 
-    WHERE contract_id = $1 
-    ORDER BY id ASC
+    SELECT cp.*, 
+           (SELECT id FROM disputes WHERE checkpoint_id = cp.id LIMIT 1) as existing_dispute_id
+    FROM checkpoints cp
+    WHERE cp.contract_id = $1 
+    ORDER BY cp.id ASC
   `,
 
   submitCheckpoint: `
@@ -119,7 +129,8 @@ module.exports = {
 
   rejectCheckpoint: `
     UPDATE checkpoints
-    SET status = 'PENDING',
+    SET status = 'REJECTED',
+        rework_count = rework_count + 1,
         review_notes = $2,
         reviewed_at = NOW(),
         updated_at = NOW()

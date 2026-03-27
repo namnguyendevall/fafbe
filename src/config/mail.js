@@ -1,39 +1,44 @@
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 
 const mailer = {
   sendMail: async ({ to, subject, html }) => {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
-      console.error('[Mailer] ERROR: RESEND_API_KEY is missing in environment variables.');
+    const user = process.env.MAIL_USER;
+    const pass = process.env.MAIL_PASS;
+    const host = process.env.MAIL_HOST || 'smtp-relay.brevo.com';
+    const port = parseInt(process.env.MAIL_PORT || '587');
+
+    if (!user || !pass) {
+      console.error('[Mailer] ERROR: MAIL_USER or MAIL_PASS is missing. Falling back to console log.');
+      console.log(`[MAIL LOG] TO: ${to}, SUBJECT: ${subject}, HTML: ${html}`);
       return;
     }
 
     try {
-      // Note: By default Resend only sends from 'onboarding@resend.dev' to the account owner
-      // Unless you have verified your own domain.
-      const response = await axios.post('https://api.resend.com/emails', {
-        from: 'FAF Account <onboarding@resend.dev>',
-        to: to,
-        subject: subject,
-        html: html,
-      }, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
+      const transporter = nodemailer.createTransport({
+        host: host,
+        port: port,
+        secure: port === 465, // true for 465, false for 587
+        auth: {
+          user: user,
+          pass: pass,
+        },
       });
-      console.log('[Mailer] SUCCESS: Email sent via Resend HTTPS API. ID:', response.data.id);
+
+      const info = await transporter.sendMail({
+        from: `"FAF System" <${process.env.MAIL_FROM || user}>`,
+        to,
+        subject,
+        html,
+      });
+
+      console.log('[Mailer] SUCCESS: Email sent via SMTP. MessageId:', info.messageId);
     } catch (err) {
-      const errorMsg = err.response?.data?.message || err.message;
-      console.error('[Mailer] FAILED via HTTPS:', errorMsg);
-      console.log(`[Mailer] TO: ${to}, CONTENT: ${html}`); // Log content so dev can see OTP
-      if (err.response?.status === 401) {
-        console.error('[Mailer] HINT: Your RESEND_API_KEY might be invalid.');
-      }
+      console.error('[Mailer] FAILED via SMTP:', err.message);
+      console.log(`[Mailer Fallback] TO: ${to}, CONTENT: ${html}`);
     }
   }
 };
 
-console.log('[Mailer Config] Method: Resend HTTPS API, API_KEY:', process.env.RESEND_API_KEY ? 'SET' : 'MISSING');
+console.log('[Mailer Config] Method: Nodemailer SMTP, USER:', process.env.MAIL_USER ? 'SET' : 'MISSING');
 
 module.exports = mailer;

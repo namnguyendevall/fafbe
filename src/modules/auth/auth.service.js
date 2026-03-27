@@ -1,4 +1,3 @@
-
 const jwt = require('jsonwebtoken');
 const pool = require('../../config/database');
 const bcrypt = require('bcrypt');
@@ -8,12 +7,16 @@ const mailer = require('../../config/mail');
 const generateOtp = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
-constgenOtp = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
 exports.register = async (email, password, role) => {
   console.log(`>>> [register] Starting for ${email}`);
+  
+  // Check if email already exists
+  const { rows: existingUser } = await pool.query(sql.findUserByEmail, [email]);
+  if (existingUser.length > 0) {
+    console.log(`[register] FAILED: Email ${email} already registered`);
+    throw new Error('Email already registered');
+  }
+
   const hashedPassword = await bcrypt.hash(password, 10);
   console.log(`[register] Bcrypt hash generated`);
 

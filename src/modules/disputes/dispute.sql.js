@@ -1,7 +1,7 @@
 module.exports = {
   create: `
-    INSERT INTO disputes (contract_id, checkpoint_id, raised_by, reason, status, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, 'OPEN', NOW(), NOW())
+    INSERT INTO disputes (contract_id, checkpoint_id, raised_by, reason, employer_resolution_deadline, status, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5, 'OPEN', NOW(), NOW())
     RETURNING *
   `,
   
@@ -9,9 +9,16 @@ module.exports = {
     SELECT d.*, 
            u.email as raiser_email,
            cp.title as checkpoint_title,
-           cp.amount as checkpoint_amount
+           cp.amount as checkpoint_amount,
+           cp.rework_count as checkpoint_rework_count,
+           cp.rework_limit as checkpoint_rework_limit,
+           uc.email as client_email,
+           uw.email as worker_email
     FROM disputes d
     JOIN users u ON u.id = d.raised_by
+    JOIN contracts c ON c.id = d.contract_id
+    JOIN users uc ON uc.id = c.client_id
+    JOIN users uw ON uw.id = c.worker_id
     LEFT JOIN checkpoints cp ON cp.id = d.checkpoint_id
     WHERE d.id = $1
   `,
@@ -29,7 +36,7 @@ module.exports = {
     RETURNING *
   `,
   getMessages: `
-     SELECT m.*, u.email as sender_email, u.role as sender_role
+     SELECT m.*, u.email as email, u.role as role
      FROM dispute_messages m
      JOIN users u ON u.id = m.sender_id
      WHERE m.dispute_id = $1

@@ -1,6 +1,5 @@
 const pool = require("../../config/database");
 const sql = require("./dispute.sql");
-const notificationService = require('../notifications/notification.service'); // Import for use
 
 exports.createDispute = async ({ contractId, checkpointId, userId, reason }) => {
     const client = await pool.connect();
@@ -21,7 +20,16 @@ exports.createDispute = async ({ contractId, checkpointId, userId, reason }) => 
             throw new Error("Chỉ có thể khiếu nại các checkpoint đã bị từ chối hoặc chưa được duyệt");
         }
 
-        const { rows } = await client.query(sql.create, [contractId, checkpointId, userId, reason]);
+        // Check if dispute already exists for this checkpoint
+        const existingDisputeRes = await client.query('SELECT id FROM disputes WHERE checkpoint_id = $1', [checkpointId]);
+        if (existingDisputeRes.rows.length > 0) {
+            throw new Error("Mỗi giai đoạn chỉ được phép khiếu nại một lần.");
+        }
+
+        const deadline = new Date();
+        deadline.setHours(deadline.getHours() + 24); // 24h deadline for Employer to resolve
+
+        const { rows } = await client.query(sql.create, [contractId, checkpointId, userId, reason, deadline]);
         const dispute = rows[0];
         
         // Update Checkpoint Status to DISPUTED
@@ -98,8 +106,10 @@ exports.addMessage = async ({ disputeId, userId, message, attachments }) => {
 };
 
 exports.resolveDispute = async ({ disputeId, resolution, adminId, io, resolutionSummary }) => {
+    const notificationService = require('../notifications/notification.service');
     const client = await pool.connect();
     try {
+        console.log(`[DisputeResolve] Resolving Dispute #${disputeId}...`, { hasNotificationService: !!notificationService });
         await client.query('BEGIN');
         
         // 1. Fetch Dispute & Contract
@@ -126,48 +136,61 @@ exports.resolveDispute = async ({ disputeId, resolution, adminId, io, resolution
             
         // 3. Handle Resolution
         if (resolution === 'CLIENT_WINS') {
-            console.log("[DisputeResolve] Resolution: CLIENT_WINS");
-            // Worker loses -> Funds for this CP (if any) go back to Client.
-            if (pendingPoints > 0) {
-                const walletService = require("../wallets/wallet.service");
-                console.log(`[DisputeResolve] Refunding pendingPoints ${pendingPoints} to Client ${contract.client_id}`);
-                await walletService.refundLockedFunds(client, {
-                    userId: contract.client_id,
-                    amount: pendingPoints,
-                    referenceId: disputeId,
-                    referenceType: 'DISPUTE_RESOLUTION_REFUND'
-                });
-            }
-            
-            // Cancel specific Checkpoint if exists
-            if (cp) {
-                await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE id = $1", [cp.id]);
-            }
+            // Worker loses -> Check if redo is possible (limit < 3)
+            if (cp && Number(cp.rework_count) < 3) {
+                console.log(`[DisputeResolve] Resolution: CLIENT_WINS (Worker must redo, rework_count: ${cp.rework_count})`);
+                
+                // Set checkpoint back to REJECTED and increment rework_count so worker can try again
+                await client.query("UPDATE checkpoints SET status = 'REJECTED', rework_count = rework_count + 1, updated_at = NOW() WHERE id = $1", [cp.id]);
+                
+                // Keep contract ACTIVE
+                await client.query("UPDATE contracts SET status = 'ACTIVE' WHERE id = $1", [contract.id]);
+                await client.query("UPDATE jobs SET status = 'IN_PROGRESS' WHERE id = $1", [contract.job_id]);
+                
+                // Funds remain locked (already handled by not releasing them)
+            } else {
+                console.log("[DisputeResolve] Resolution: CLIENT_WINS (Final Failure or No CP - Rework Limit Reached)");
+                // Worker loses -> Funds for this CP (if any) go back to Client.
+                if (pendingPoints > 0) {
+                    const walletService = require("../wallets/wallet.service");
+                    console.log(`[DisputeResolve] Refunding pendingPoints ${pendingPoints} to Client ${contract.client_id}`);
+                    await walletService.refundLockedFunds(client, {
+                        userId: contract.client_id,
+                        amount: pendingPoints,
+                        referenceId: disputeId,
+                        referenceType: 'DISPUTE_RESOLUTION_REFUND'
+                    });
+                }
+                
+                // Cancel specific Checkpoint if exists
+                if (cp) {
+                    await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE id = $1", [cp.id]);
+                }
 
-            // Cancel Contract since worker failed
-            await client.query("UPDATE contracts SET status = 'CANCELLED' WHERE id = $1", [contract.id]);
-            await client.query("UPDATE jobs SET status = 'CANCELLED' WHERE id = $1", [contract.job_id]);
+                // TERMINATE Contract since worker failed too many times
+                await client.query("UPDATE contracts SET status = 'TERMINATED', updated_at = NOW() WHERE id = $1", [contract.id]);
+                // RE-OPEN Job
+                await client.query("UPDATE jobs SET status = 'OPEN', updated_at = NOW() WHERE id = $1", [contract.job_id]);
 
-            
-            // Refund ALL non-approved checkpoints for this contract
-            // (If cp was handled above, we exclude it or just query all remaining)
-            const remCps = await client.query("SELECT * FROM checkpoints WHERE contract_id = $1 AND status != 'APPROVED' " + (cp ? `AND id != ${cp.id}` : ""), [contract.id]);
-            const remainingRefund = remCps.rows.reduce((sum, r) => sum + Number(r.amount), 0);
-            
-            console.log(`[DisputeResolve] remainingRefund for other CPs:`, remainingRefund);
-            if (remainingRefund > 0) {
-                 const walletService = require("../wallets/wallet.service");
-                 console.log(`[DisputeResolve] Refunding remainingRefund ${remainingRefund} to Client ${contract.client_id}`);
-                 await walletService.refundLockedFunds(client, {
-                    userId: contract.client_id,
-                    amount: remainingRefund,
-                    referenceId: contract.id,
-                    referenceType: 'CONTRACT_CANCELLATION_REFUND'
-                });
+                // Reset worker's ACCEPTED proposal so they are no longer "hired" for this job
+                await client.query("UPDATE proposals SET status = 'REJECTED', updated_at = NOW() WHERE job_id = $1 AND worker_id = $2", [contract.job_id, contract.worker_id]);
+
+                // Refund ALL remaining non-approved checkpoints for this contract
+                const remCps = await client.query("SELECT * FROM checkpoints WHERE contract_id = $1 AND status != 'APPROVED' " + (cp ? `AND id != ${cp.id}` : ""), [contract.id]);
+                const remainingRefund = remCps.rows.reduce((sum, r) => sum + Number(r.amount), 0);
+                
+                if (remainingRefund > 0) {
+                    const walletService = require("../wallets/wallet.service");
+                    await walletService.refundLockedFunds(client, {
+                        userId: contract.client_id,
+                        amount: remainingRefund,
+                        referenceId: contract.id,
+                        referenceType: 'CONTRACT_TERMINATION_REFUND'
+                    });
+                }
+                // Cancel all remaining checkpoints
+                await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE contract_id = $1 AND status != 'APPROVED'", [contract.id]);
             }
-            // Cancel all remaining checkpoints
-            await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE contract_id = $1 AND status != 'APPROVED'", [contract.id]);
-
         } else if (resolution === 'WORKER_WINS') {
             console.log("[DisputeResolve] Resolution: WORKER_WINS");
             // Worker wins -> Funds released to Worker.
@@ -251,5 +274,33 @@ exports.resolveDispute = async ({ disputeId, resolution, adminId, io, resolution
         throw e;
     } finally {
         client.release();
+    }
+};
+
+/**
+ * Handle Auto-resolution for expired deadlines (Employer silent for > 24h)
+ * Called by cron or background job
+ */
+exports.processAutoResolutions = async (io) => {
+    const { rows: expiredDisputes } = await pool.query(`
+        SELECT id FROM disputes 
+        WHERE status = 'OPEN' AND employer_resolution_deadline < NOW()
+    `);
+
+    console.log(`[DisputeAutoResolve] Found ${expiredDisputes.length} disputes to auto-resolve`);
+
+    for (const d of expiredDisputes) {
+        try {
+            await exports.resolveDispute({
+                disputeId: d.id,
+                resolution: 'WORKER_WINS',
+                adminId: null, // System resolved
+                io,
+                resolutionSummary: 'Auto-resolved after 24h of Employer silence.'
+            });
+            console.log(`[DisputeAutoResolve] Auto-resolved Dispute #${d.id}`);
+        } catch (err) {
+            console.error(`[DisputeAutoResolve] Failed to auto-resolve Dispute #${d.id}:`, err);
+        }
     }
 };

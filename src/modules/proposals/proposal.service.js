@@ -14,8 +14,8 @@ exports.createProposal = async ({ jobId, workerId, coverLetter, proposedPrice })
     const existingRes = await client.query(sql.checkExisting, [jobId, workerId]);
     if (existingRes.rows.length > 0) throw new Error("ALREADY_APPLIED");
 
-    // 2.1 Check Active Contract (Exclusive Work Policy)
-    const activeContractRes = await client.query(`SELECT id FROM contracts WHERE worker_id = $1 AND status = 'ACTIVE'`, [workerId]);
+    // 2.1 Check Active or Pending Contract (Exclusive Work Policy)
+    const activeContractRes = await client.query(`SELECT id FROM contracts WHERE worker_id = $1 AND status IN ('PENDING', 'ACTIVE')`, [workerId]);
     if (activeContractRes.rows.length > 0) throw new Error("WORKER_BUSY_CANNOT_APPLY");
 
     // 2.5 Moderate cover letter
@@ -60,20 +60,30 @@ exports.acceptProposal = async (proposalId, clientId) => {
     const proposal = pRows[0];
     if (!proposal) throw new Error("PROPOSAL_NOT_FOUND");
 
+    // Guard: Only PENDING proposals can be accepted
+    if (proposal.status !== 'PENDING') {
+        throw new Error("Chỉ có thể chấp nhận các đề xuất đang ở trạng thái chờ (PENDING).");
+    }
+
     // 2. Validate Job Ownership
     const jobRes = await client.query('SELECT * FROM jobs WHERE id = $1', [proposal.job_id]);
     const job = jobRes.rows[0];
     if (!job) throw new Error("JOB_NOT_FOUND");
     if (job.client_id !== clientId) throw new Error("UNAUTHORIZED");
 
-    // 2.1 CHECK WORKER BUSY STATUS (Restriction: 1 Active Job)
+    // Guard: Job must be OPEN to accept a new proposal
+    if (job.status !== 'OPEN') {
+        throw new Error("Công việc hiện không ở trạng thái mở để chấp nhận đề xuất mới.");
+    }
+
+    // 2.1 CHECK WORKER BUSY STATUS (Restriction: 1 Active/Pending Job)
     const activeContractRes = await client.query(`
         SELECT id FROM contracts 
-        WHERE worker_id = $1 AND status = 'ACTIVE'
+        WHERE worker_id = $1 AND status IN ('PENDING', 'ACTIVE')
     `, [proposal.worker_id]);
     
     if (activeContractRes.rows.length > 0) {
-        throw new Error("WORKER_HAS_ACTIVE_JOB");
+        throw new Error("WORKER_HAS_ACTIVE_OR_PENDING_JOB");
     }
 
     // 2.2 ENSURE WORKER PROFILE EXISTS (to prevent JOIN errors later)

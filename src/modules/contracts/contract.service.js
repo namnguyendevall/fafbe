@@ -219,6 +219,11 @@ exports.submitCheckpoint = async ({ checkpointId, workerId, submissionUrl, submi
             throw new Error('CHECKPOINT_CANNOT_BE_SUBMITTED');
         }
 
+        // Enforce 3-rework limit
+        if (cp.rework_count >= 3) {
+            throw new Error('Giới hạn làm lại tối đa (3 lần) đã hết cho giai đoạn này.');
+        }
+
         const contractRes = await client.query('SELECT * FROM contracts WHERE id = $1', [cp.contract_id]);
         const contract = contractRes.rows[0];
         if (!contract || contract.worker_id != workerId) throw new Error('UNAUTHORIZED');
@@ -439,13 +444,13 @@ exports.terminateContract = async ({ contractId, userId }) => {
         const checkpointsRes = await client.query('SELECT * FROM checkpoints WHERE contract_id = $1', [contractId]);
         const checkpoints = checkpointsRes.rows;
         
-        // 3. Mark contract and pending checkpoints as CANCELLED
-        await client.query("UPDATE contracts SET status = 'CANCELLED', updated_at = NOW() WHERE id = $1", [contractId]);
-        await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE contract_id = $1 AND status = 'PENDING'", [contractId]);
+        // 3. Mark contract and non-approved checkpoints as TERMINATED/CANCELLED
+        await client.query("UPDATE contracts SET status = 'TERMINATED', updated_at = NOW() WHERE id = $1", [contractId]);
+        await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE contract_id = $1 AND status != 'APPROVED'", [contractId]);
 
-        // 4. Calculate amount to refund (all PENDING checkpoints)
-        const pendingCheckpoints = checkpoints.filter(cp => cp.status === 'PENDING');
-        const refundAmount = pendingCheckpoints.reduce((sum, cp) => sum + Number(cp.amount), 0);
+        // 4. Calculate amount to refund (all non-approved checkpoints)
+        const nonApprovedCheckpoints = checkpoints.filter(cp => cp.status !== 'APPROVED');
+        const refundAmount = nonApprovedCheckpoints.reduce((sum, cp) => sum + Number(cp.amount), 0);
 
         // 5. Refund remaining amount to Client
         if (refundAmount > 0) {
@@ -465,13 +470,13 @@ exports.terminateContract = async ({ contractId, userId }) => {
         if (contract.worker_id) {
             await client.query(`
                 UPDATE proposals
-                SET status = 'PENDING', updated_at = NOW()
-                WHERE job_id = $1 AND worker_id = $2 AND status = 'ACCEPTED'
+                SET status = 'REJECTED', updated_at = NOW()
+                WHERE job_id = $1 AND worker_id = $2
             `, [contract.job_id, contract.worker_id]);
         }
 
         // 8. Create New DRAFT Contract for Remaining Work
-        if (pendingCheckpoints.length > 0) {
+        if (nonApprovedCheckpoints.length > 0) {
             // Create Contract
              const newContractRes = await client.query(`
                 INSERT INTO contracts (
@@ -484,7 +489,7 @@ exports.terminateContract = async ({ contractId, userId }) => {
             const newContract = newContractRes.rows[0];
 
             // Create Checkpoints
-            for (const cp of pendingCheckpoints) {
+            for (const cp of nonApprovedCheckpoints) {
                 await client.query(`
                     INSERT INTO checkpoints (
                         contract_id, title, description,

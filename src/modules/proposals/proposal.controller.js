@@ -16,18 +16,23 @@ exports.create = async (req, res) => {
         jobId, workerId, coverLetter, proposedPrice
     });
 
-    // Notify Client
-    const job = await getJobById(jobId);
-    if (job) {
-        const io = req.app.get('io');
-        await notificationService.createNotification({
-            userId: job.client_id,
-            type: 'PROPOSAL_RECEIVED',
-            title: 'New Proposal Received',
-            message: `You have a new proposal for job "${job.title}"`,
-            data: { proposalId: proposal.id, jobId: job.id },
-            io
-        });
+    // Notify Client (Optional, don't let it crash the whole request)
+    try {
+        const job = await getJobById(jobId);
+        if (job) {
+            const io = req.app.get('io');
+            await notificationService.createNotification({
+                userId: job.client_id,
+                type: 'PROPOSAL_RECEIVED',
+                title: 'New Proposal Received',
+                message: `You have a new proposal for job "${job.title}"`,
+                data: { proposalId: proposal.id, jobId: job.id },
+                io
+            });
+        }
+    } catch (notifErr) {
+        console.error("[Proposal Controller] Notification failed:", notifErr.message);
+        // We still return 201 because the proposal itself was created
     }
 
     return res.status(201).json({ 

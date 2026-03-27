@@ -131,4 +131,30 @@ router.post('/:id/messages', auth, upload.array('attachments', 5), controller.ad
  */
 router.post('/:id/resolve', auth, controller.resolve); // Admin check inside controller
 
+/**
+ * @swagger
+ * /api/disputes/{id}/employer-resolve:
+ *   post:
+ *     summary: Resolve dispute (Employer/Client)
+ *     tags: [Disputes]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - action
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [CONCEDE, ESCALATE]
+ */
+router.post('/:id/employer-resolve', auth, controller.employerResolve);
+
 module.exports = router;

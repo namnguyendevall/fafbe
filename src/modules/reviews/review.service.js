@@ -12,7 +12,9 @@ exports.createReview = async ({ contractId, reviewerId, rating, comment, skillRa
         const contract = contractRes.rows[0];
         
         if (!contract) throw new Error("CONTRACT_NOT_FOUND");
-        if (contract.status !== 'COMPLETED') throw new Error("CONTRACT_NOT_COMPLETED");
+        if (contract.status !== 'COMPLETED' && contract.status !== 'TERMINATED') {
+            throw new Error("Chỉ có thể đánh giá các hợp đồng đã hoàn thành hoặc đã bị chấm dứt (sau tranh chấp)");
+        }
         
         // 2. Determine reviewee (the other party)
         let revieweeId;
