@@ -22,6 +22,7 @@ async function createJobWithContractAndCheckpoints({
   description,
   jobType,
   budget,
+  totalLockAmount,
   checkpoints,
   contractContent,
   skills,
@@ -38,11 +39,11 @@ async function createJobWithContractAndCheckpoints({
   try {
     await client.query("BEGIN");
 
-    // 1️⃣ Lock budget
+    // 1️⃣ Lock budget (budget + fee)
     const walletService = require("../wallets/wallet.service");
     await walletService.lockBudget(client, {
        userId: clientId,
-       amount: budget,
+       amount: totalLockAmount || budget,
        referenceId: 0, // We will update this after job is created? Or use a placeholder.
        referenceType: 'JOB_CREATION'
     });
@@ -340,19 +341,73 @@ async function updateJob(jobId, data) {
 }
 
 /**
- * DELETE JOB (soft delete)
+ * DELETE JOB (soft delete & refund)
  */
-async function deleteJob(jobId) {
-  const { rowCount } = await pool.query(
-    `
-    UPDATE jobs
-    SET status = 'CANCELLED',
-        updated_at = NOW()
-    WHERE id = $1
-    `,
-    [jobId],
-  );
-  return rowCount > 0;
+async function deleteJob(jobId, requestingUser) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Fetch Job
+    const jobRes = await client.query('SELECT * FROM jobs WHERE id = $1', [jobId]);
+    const job = jobRes.rows[0];
+    if (!job) throw new Error("JOB_NOT_FOUND");
+
+    // 2. Role Verification
+    if (requestingUser.role !== 'admin' && job.client_id !== requestingUser.id) {
+        throw new Error("UNAUTHORIZED");
+    }
+
+    // 3. Status Gate (must be PENDING or OPEN or REJECTED)
+    if (!['PENDING', 'OPEN', 'REJECTED'].includes(job.status)) {
+        throw new Error("CANNOT_DELETE_ACTIVE_JOB");
+    }
+
+    // 4. Update parent Job Status -> CANCELLED
+    const { rowCount } = await client.query(
+      `
+      UPDATE jobs
+      SET status = 'CANCELLED',
+          updated_at = NOW()
+      WHERE id = $1
+      `,
+      [jobId],
+    );
+
+    // 5. Update related DRAFT contracts -> CANCELLED
+    await client.query(
+      `
+      UPDATE contracts
+      SET status = 'CANCELLED', updated_at = NOW()
+      WHERE job_id = $1 AND status = 'DRAFT'
+      `,
+      [jobId]
+    );
+
+    // 6. Refund employer (If the job hasn't previously been rejected, as REJECTED already refunds)
+    if (job.status !== 'REJECTED') {
+        const budget = Number(job.budget);
+        const PLATFORM_FEE_PERCENT = 5; 
+        const fee = Math.round((budget * PLATFORM_FEE_PERCENT) / 100);
+        const refundAmount = budget + fee;
+
+        const walletService = require("../wallets/wallet.service");
+        await walletService.refundLockedFunds(client, {
+            userId: job.client_id,
+            amount: refundAmount,
+            referenceId: jobId,
+            referenceType: 'JOB_CANCELED'
+        });
+    }
+
+    await client.query('COMMIT');
+    return rowCount > 0;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 /**

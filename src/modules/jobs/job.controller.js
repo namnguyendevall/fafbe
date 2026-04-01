@@ -5,7 +5,7 @@ const { createJobWithContractAndCheckpoints, getJobById,
   deleteJob, } = require("./job.service");
 const { getCategoryById } = require("../category/cate.service");
 
-const PLATFORM_FEE_PERCENT = 3; // 3%
+const PLATFORM_FEE_PERCENT = 5; // 5%
 
 const ALLOWED_JOB_TYPES = ["SHORT_TERM", "LONG_TERM"];
 
@@ -162,6 +162,11 @@ async function createJob(req, res) {
 
     const budgetNum = Number(budget);
 
+    const platformFeeAmount = Math.round(
+      (budgetNum * PLATFORM_FEE_PERCENT) / 100,
+    );
+    const totalLockAmount = budgetNum + platformFeeAmount;
+
     // ✅ 4. Create job + contract + checkpoints
     const {
       job,
@@ -173,6 +178,7 @@ async function createJob(req, res) {
       description,
       jobType,
       budget: budgetNum,
+      totalLockAmount,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
       checkpoints: checkpoints.map((cp) => ({
@@ -187,10 +193,6 @@ async function createJob(req, res) {
       deadline: req.body.deadline,
       resourceUrls: resourceUrls || [],
     });
-
-    const platformFeeAmount = Math.round(
-      (budgetNum * PLATFORM_FEE_PERCENT) / 100,
-    );
 
     // Notify Admins
     try {
@@ -400,17 +402,22 @@ async function reviewJobHandler(req, res) {
 }
 
 async function deleteJobHandler(req, res) {
-
   try {
-    const success = await deleteJob(Number(req.params.id));
+    const success = await deleteJob(Number(req.params.id), req.user);
 
     if (!success) {
-      return res.status(404).json({ message: 'Job not found' });
+      return res.status(404).json({ message: 'Job not found or could not be cancelled' });
     }
 
-    return res.json({ message: 'Job deleted successfully' });
+    return res.json({ message: 'Job strictly cancelled and logic processed successfully' });
   } catch (error) {
     console.error(error);
+    if (error.message === 'CANNOT_DELETE_ACTIVE_JOB') {
+        return res.status(400).json({ message: "Cannot cancel a job that is already active or in progress. Please use the Dispute system instead." });
+    }
+    if (error.message === 'UNAUTHORIZED') {
+        return res.status(403).json({ message: "You are not authorized to cancel this job." });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 }
