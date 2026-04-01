@@ -99,6 +99,22 @@ r.get('/top-talents', auth, c.getTopTalents);
  */
 r.get('/:id', auth, c.getPublicProfile);
 
+/**
+ * @swagger
+ * /api/users/{id}:
+ *   delete:
+ *     summary: Delete a user account (Admin only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ */
+r.delete('/:id', auth, role(['admin']), c.deleteUserByAdmin);
 
 /**
  * @swagger

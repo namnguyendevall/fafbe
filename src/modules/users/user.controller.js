@@ -30,6 +30,17 @@ exports.deleteAccount = async (req, res) => {
   }
 };
 
+exports.deleteUserByAdmin = async (req, res) => {
+  try {
+    const targetUserId = req.params.id;
+    await s.deleteAccount(targetUserId);
+    res.json({ message: "Admin xoá tài khoản thành công." });
+  } catch (error) {
+    console.error('Error in deleteUserByAdmin controller:', error);
+    res.status(400).json({ message: error.message });
+  }
+};
+
 exports.listUsers = async (req, res) => {
   try {
     const page = Number(req.query.page || 1);
