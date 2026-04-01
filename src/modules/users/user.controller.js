@@ -20,6 +20,16 @@ exports.updateMe = async (req, res) => {
   }
 };
 
+exports.deleteAccount = async (req, res) => {
+  try {
+    await s.deleteAccount(req.user.id);
+    res.json({ message: "Ngắt kết nối và xoá tài khoản thành công." });
+  } catch (error) {
+    console.error('Error in deleteAccount controller:', error);
+    res.status(400).json({ message: error.message });
+  }
+};
+
 exports.listUsers = async (req, res) => {
   try {
     const page = Number(req.query.page || 1);

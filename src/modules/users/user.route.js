@@ -45,6 +45,7 @@ const role = require('../../middlewares/role.middleware');
  */
 r.get('/me', auth, c.me);
 r.put('/me', auth, c.updateMe);
+r.delete('/me', auth, c.deleteAccount);
 
 /**
  * @swagger

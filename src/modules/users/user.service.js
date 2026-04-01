@@ -24,9 +24,50 @@ exports.getMyProfile = async (userId) => {
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
-  } finally {
-    client.release();
-  }
+    } finally {
+      client.release();
+    }
+  };
+
+exports.deleteAccount = async (userId) => {
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // 1. Check Wallet Balance
+        const { rows: wallets } = await client.query('SELECT balance FROM wallets WHERE user_id = $1', [userId]);
+        if (wallets.length > 0 && parseFloat(wallets[0].balance) > 0) {
+            throw new Error("Vui lòng rút hết điểm CRED trước khi xoá tài khoản.");
+        }
+
+        // 2. Check Active Jobs
+        const { rows: jobs } = await client.query(`
+            SELECT id FROM jobs 
+            WHERE (employer_id = $1 OR worker_id = $1)
+            AND status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED')
+            LIMIT 1
+        `, [userId]);
+
+        if (jobs.length > 0) {
+            throw new Error("Không thể xoá tài khoản khi đang có công việc chưa hoàn thành (đang thực hiện hoặc tranh chấp).");
+        }
+
+        // 3. Soft Delete User
+        // Append epoch time to email to free up the original email, set status to DELETED
+        await client.query(`
+            UPDATE users 
+            SET status = 'DELETED',
+                email = email || '_deleted_' || extract(epoch from now())
+            WHERE id = $1
+        `, [userId]);
+
+        await client.query('COMMIT');
+    } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+    } finally {
+        client.release();
+    }
 };
 
 exports.createProfileIfNotExist = async (userId, fullName) => {
