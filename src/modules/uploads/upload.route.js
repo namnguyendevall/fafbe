@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { v2: cloudinary } = require('cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const axios = require('axios');
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ const uploadToCloudinary = (buffer, originalName, folder = 'faf_submissions') =>
             },
             (error, result) => {
                 if (error) return reject(error);
-                resolve(result.secure_url);
+                resolve(result); // Return entire result (includes bytes, secure_url, etc)
             }
         );
         stream.end(buffer);
@@ -44,13 +45,19 @@ router.post('/submission', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Không có file' });
 
     try {
-        let url;
+        let resultUrl;
+        let resultSize = req.file.size;
+        let resultName = req.file.originalname;
+
         console.log(`[upload/submission] File received: ${req.file.originalname}, size: ${req.file.size}`);
         
         if (process.env.CLOUDINARY_URL) {
             console.log(`[upload/submission] Attempting Cloudinary upload...`);
-            url = await uploadToCloudinary(req.file.buffer, req.file.originalname);
-            console.log(`[upload/submission] Cloudinary upload success: ${url}`);
+            const cloudRes = await uploadToCloudinary(req.file.buffer, req.file.originalname);
+            resultUrl = cloudRes.secure_url;
+            resultSize = cloudRes.bytes || req.file.size;
+            resultName = cloudRes.original_filename || req.file.originalname;
+            console.log(`[upload/submission] Cloudinary upload success: ${resultUrl}`);
         } else {
             console.log(`[upload/submission] Falling back to local storage...`);
             // Fallback to local storage (Disk)
@@ -69,11 +76,11 @@ router.post('/submission', upload.single('file'), async (req, res) => {
 
             const host = req.get('host');
             const protocol = req.protocol;
-            url = `${protocol}://${host}/uploads/submissions/${filename}`;
-            console.log(`[upload/submission] Local upload success: ${url}`);
+            resultUrl = `${protocol}://${host}/uploads/submissions/${filename}`;
+            console.log(`[upload/submission] Local upload success: ${resultUrl}`);
         }
 
-        res.json({ url, filename: req.file.originalname, size: req.file.size });
+        res.json({ url: resultUrl, filename: resultName, size: resultSize });
     } catch (error) {
         console.error("[upload/submission] Error:", {
             message: error.message,
@@ -84,6 +91,36 @@ router.post('/submission', upload.single('file'), async (req, res) => {
             message: 'Lỗi upload file: ' + error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
         });
+    }
+});
+
+// GET /api/uploads/download — Proxy to fetch files from Cloudinary and stream to user
+router.get('/download', async (req, res) => {
+    const { url, name } = req.query;
+    if (!url) return res.status(400).json({ message: 'URL is required' });
+
+    console.log(`[upload/download] Proxying: ${url}, name: ${name}`);
+
+    try {
+        const response = await axios({
+            method: 'get',
+            url: url,
+            responseType: 'stream',
+            timeout: 30000 // 30s timeout
+        });
+
+        // Forward content type from Cloudinary
+        res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
+        
+        // Force download with name
+        const safeName = name || url.split('/').pop() || 'download';
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeName)}"`);
+
+        // Pipe stream
+        response.data.pipe(res);
+    } catch (error) {
+        console.error("[upload/download] Proxy Error:", error.message);
+        res.status(500).json({ message: 'Download failed: ' + error.message });
     }
 });
 
