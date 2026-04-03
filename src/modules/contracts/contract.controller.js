@@ -21,6 +21,16 @@ exports.updateContent = async (req, res) => {
 exports.requestSignOtp = async (req, res) => {
     console.log(`>>> [requestSignOtp] Hit! User ID: ${req.user.id}, Contract ID: ${req.params.id}`);
     try {
+        // ✅ Check profile completeness
+        const isComplete = await userService.isProfileComplete(req.user.id);
+        if (!isComplete) {
+            return res.status(403).json({
+                message: "Bạn cần cập nhật thông tin cá nhân (Họ và tên) trước khi ký hợp đồng.",
+                error: "PROFILE_INCOMPLETE",
+                redirect: "/settings"
+            });
+        }
+
         console.log(`[requestSignOtp] Fetching profile for user ${req.user.id}`);
         const user = await userService.getMyProfile(req.user.id);
         if (!user) return res.status(404).json({ message: "User not found" });
@@ -44,6 +54,16 @@ exports.requestSignOtp = async (req, res) => {
 
 exports.sign = async (req, res) => {
     try {
+        // ✅ Check profile completeness
+        const isComplete = await userService.isProfileComplete(req.user.id);
+        if (!isComplete) {
+            return res.status(403).json({
+                message: "Bạn cần cập nhật thông tin cá nhân (Họ và tên) trước khi ký hợp đồng.",
+                error: "PROFILE_INCOMPLETE",
+                redirect: "/settings"
+            });
+        }
+
         const { id } = req.params;
         const { otp } = req.body;
 
@@ -83,7 +103,7 @@ exports.sign = async (req, res) => {
 exports.get = async (req, res) => {
     try {
         const { id } = req.params;
-        const result = await s.getContract(id);
+        const result = await s.getContract(id, req.user?.id);
         if (!result) return res.status(404).json({ message: "Contract not found" });
         return res.json({ data: result });
     } catch (e) {

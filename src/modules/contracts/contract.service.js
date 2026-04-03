@@ -153,10 +153,18 @@ async function emailServiceWrapper(client, contract) {
 }
 
 
-exports.getContract = async (id) => {
+exports.getContract = async (id, userId = null) => {
     const { rows } = await pool.query(sql.getById, [id]);
     const contract = rows[0];
     if (!contract) return null;
+    
+    // Check if current user has already reviewed this contract
+    if (userId) {
+        const reviewRes = await pool.query('SELECT id FROM reviews WHERE contract_id = $1 AND reviewer_id = $2', [id, userId]);
+        contract.is_reviewed = reviewRes.rows.length > 0;
+    } else {
+        contract.is_reviewed = false;
+    }
     
     // Include checkpoints
     const checkpointsRes = await pool.query(sql.getCheckpointsByContract, [contract.id]);

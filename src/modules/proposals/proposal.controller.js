@@ -2,9 +2,20 @@ const s = require("./proposal.service");
 const { getJobById } = require("../jobs/job.service");
 const notificationService = require('../notifications/notification.service');
 const chatService = require('../chat/chat.service');
+const userService = require('../users/user.service');
 
 exports.create = async (req, res) => {
   try {
+    // ✅ Check profile completeness
+    const isComplete = await userService.isProfileComplete(req.user.id);
+    if (!isComplete) {
+      return res.status(403).json({
+        message: "Bạn cần cập nhật thông tin cá nhân (Họ và tên) trước khi gửi đề xuất.",
+        error: "PROFILE_INCOMPLETE",
+        redirect: "/settings"
+      });
+    }
+
     const { jobId, coverLetter, proposedPrice } = req.body;
     const workerId = req.user.id;
     

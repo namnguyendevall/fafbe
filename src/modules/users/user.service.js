@@ -28,6 +28,11 @@ exports.getMyProfile = async (userId) => {
       client.release();
     }
   };
+  
+exports.isProfileComplete = async (userId) => {
+  const profile = await exports.getMyProfile(userId);
+  return !!(profile && profile.full_name && profile.full_name.trim() !== "");
+};
 
 exports.deleteAccount = async (userId) => {
     const client = await pool.connect();

@@ -234,7 +234,8 @@ async function getJobById(jobId, requestingUser = null) {
               'total_amount', ct.total_amount,
               'status', ct.status,
               'terms', ct.contract_content,
-              'created_at', ct.created_at
+              'created_at', ct.created_at,
+              'is_reviewed', EXISTS (SELECT 1 FROM reviews r WHERE r.contract_id = ct.id AND r.reviewer_id = $2)
             ) FROM contracts ct 
             WHERE ct.job_id = j.id 
             ORDER BY 

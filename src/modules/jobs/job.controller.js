@@ -3,6 +3,7 @@ const { createJobWithContractAndCheckpoints, getJobById,
   updateJob,
   reviewJob,
   deleteJob, } = require("./job.service");
+const userService = require("../users/user.service");
 const { getCategoryById } = require("../category/cate.service");
 
 const PLATFORM_FEE_PERCENT = 5; // 5%
@@ -138,6 +139,16 @@ async function createJob(req, res) {
     }
 
     console.log(`[createJob] Role check PASSED for user: ${user.id}`);
+    
+    // ✅ 0. Check profile completeness
+    const isComplete = await userService.isProfileComplete(user.id);
+    if (!isComplete) {
+      return res.status(403).json({
+        message: "Bạn cần cập nhật thông tin cá nhân (Họ và tên) trước khi tạo công việc.",
+        error: "PROFILE_INCOMPLETE",
+        redirect: "/settings"
+      });
+    }
 
     const {
       title,
