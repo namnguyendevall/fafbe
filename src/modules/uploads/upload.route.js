@@ -104,36 +104,33 @@ router.get('/download', async (req, res) => {
 
     try {
         let fetchUrl = url;
+        const axiosOptions = {
+            method: 'get',
+            responseType: 'stream',
+            timeout: 30000
+        };
 
-        // If it's a Cloudinary URL, generate a SIGNED version to bypass 401
+        // If it's a Cloudinary URL, use Owner credentials to fetch
         if (url.includes('cloudinary.com')) {
-            try {
-                // Extract public_id from URL (e.g. faf_submissions/filename.zip)
-                // Cloudinary URL usually: .../upload/v1234567/folder/id.ext
-                const parts = url.split('/');
-                const uploadIndex = parts.indexOf('upload');
-                if (uploadIndex !== -1 && parts.length > uploadIndex + 2) {
-                    // Public ID is the part after the version (vXXXXXX)
-                    const publicIdWithExt = parts.slice(uploadIndex + 2).join('/');
-                    // Use SDK to generate a signed delivery URL
-                    fetchUrl = cloudinary.url(publicIdWithExt, {
-                        resource_type: 'raw',
-                        sign_url: true,
-                        secure: true
-                    });
-                    console.log(`[upload/download] Signed URL generated: ${fetchUrl}`);
-                }
-            } catch (signErr) {
-                console.warn("[upload/download] URL Signing failed, using raw url:", signErr.message);
+            const config = cloudinary.config();
+            if (config.api_key && config.api_secret) {
+                // Use Basic Auth for Owner-level access
+                const auth = Buffer.from(`${config.api_key}:${config.api_secret}`).toString('base64');
+                axiosOptions.headers = {
+                    'Authorization': `Basic ${auth}`
+                };
+                console.log(`[upload/download] Fetching with Owner credentials: ${url}`);
+            } else {
+                console.warn("[upload/download] Cloudinary credentials missing in config");
             }
         }
 
         const response = await axios({
-            method: 'get',
-            url: fetchUrl,
-            responseType: 'stream',
-            timeout: 30000 // 30s timeout
+            ...axiosOptions,
+            url: fetchUrl
         });
+
+        console.log(`[upload/download] Successfully connected to source. Status: ${response.status}`);
 
         // Forward content type from Cloudinary
         res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
@@ -145,8 +142,13 @@ router.get('/download', async (req, res) => {
         // Pipe stream
         response.data.pipe(res);
     } catch (error) {
-        console.error("[upload/download] Proxy Error:", error.message);
-        res.status(500).json({ message: 'Download failed: ' + error.message });
+        const status = error.response?.status;
+        const msg = error.response?.data?.error?.message || error.message;
+        console.error(`[upload/download] Proxy Error (${status}):`, msg);
+        res.status(status || 500).json({ 
+            message: `Download failed: ${msg}`,
+            status: status 
+        });
     }
 });
 
