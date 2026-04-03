@@ -14,6 +14,8 @@ module.exports = {
            c.contract_content as contract_content,
            c.total_amount as contract_total_amount,
            cp.title as checkpoint_title,
+           cp.description as checkpoint_description,
+           cp.deadline as checkpoint_deadline,
            cp.amount as checkpoint_amount,
            cp.rework_count as checkpoint_rework_count,
            cp.rework_limit as checkpoint_rework_limit,
