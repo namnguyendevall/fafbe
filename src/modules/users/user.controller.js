@@ -3,7 +3,7 @@ const s = require('./user.service');
 exports.me = async (req, res) => {
   try {
     const profile = await s.getMyProfile(req.user.id);
-    res.json(profile);
+    res.json({ data: profile });
   } catch (error) {
     console.error('Error in me controller:', error);
     res.status(500).json({ message: error.message });
@@ -13,7 +13,7 @@ exports.me = async (req, res) => {
 exports.updateMe = async (req, res) => {
   try {
     const profile = await s.updateProfile(req.user.id, req.body);
-    res.json(profile);
+    res.json({ data: profile });
   } catch (error) {
     console.error('Error in updateMe controller:', error);
     res.status(500).json({ message: error.message });
