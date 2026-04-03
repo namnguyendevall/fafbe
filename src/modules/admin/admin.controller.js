@@ -199,6 +199,44 @@ exports.rejectCategoryProposal = async (req, res) => {
   }
 };
 
+exports.listInactiveCategories = async (req, res) => {
+  try {
+    const data = await s.getInactiveCategories();
+    return res.json({ data });
+  } catch (error) { return res.status(500).json({ error: error.message }); }
+};
+exports.approveInactiveCategory = async (req, res) => {
+  try {
+    await s.approveInactiveCategory(req.params.id);
+    return res.json({ message: "Approved successfully" });
+  } catch (error) { return res.status(500).json({ error: error.message }); }
+};
+exports.rejectInactiveCategory = async (req, res) => {
+  try {
+    await s.rejectInactiveCategory(req.params.id);
+    return res.json({ message: "Rejected successfully" });
+  } catch (error) { return res.status(500).json({ error: error.message }); }
+};
+
+exports.listInactiveSkills = async (req, res) => {
+  try {
+    const data = await s.getInactiveSkills();
+    return res.json({ data });
+  } catch (error) { return res.status(500).json({ error: error.message }); }
+};
+exports.approveInactiveSkill = async (req, res) => {
+  try {
+    await s.approveInactiveSkill(req.params.id);
+    return res.json({ message: "Approved successfully" });
+  } catch (error) { return res.status(500).json({ error: error.message }); }
+};
+exports.rejectInactiveSkill = async (req, res) => {
+  try {
+    await s.rejectInactiveSkill(req.params.id);
+    return res.json({ message: "Rejected successfully" });
+  } catch (error) { return res.status(500).json({ error: error.message }); }
+};
+
 exports.createManager = async (req, res) => {
   try {
     const { email, password } = req.body;

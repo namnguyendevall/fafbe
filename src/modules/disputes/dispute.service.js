@@ -100,8 +100,8 @@ exports.listByUser = async (userId) => {
 };
 
 
-exports.addMessage = async ({ disputeId, userId, message, attachments }) => {
-     const { rows } = await pool.query(sql.addMessage, [disputeId, userId, message, attachments || []]);
+exports.addMessage = async ({ disputeId, userId, message, attachments, imageUrl }) => {
+     const { rows } = await pool.query(sql.addMessage, [disputeId, userId, message, attachments || [], imageUrl || null]);
      return rows[0];
 };
 

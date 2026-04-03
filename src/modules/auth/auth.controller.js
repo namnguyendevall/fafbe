@@ -2,7 +2,8 @@ const service = require('./auth.service');
 
 exports.register = async (req, res) => {
   try {
-    const { user, mailSent } = await service.register(req.body.email, req.body.password, req.body.role);
+    const fullName = req.body.fullName || req.body.username;
+    const { user, mailSent } = await service.register(req.body.email, req.body.password, req.body.role, fullName);
     res.json({ 
       message: mailSent ? 'OTP sent to email' : 'Account created. Please check your email for the OTP.',
       mailSent 

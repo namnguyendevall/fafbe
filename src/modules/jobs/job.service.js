@@ -18,6 +18,7 @@ const pool = require("../../config/database");
 async function createJobWithContractAndCheckpoints({
   clientId,
   categoryId,
+  categoryName,
   title,
   description,
   jobType,
@@ -30,6 +31,7 @@ async function createJobWithContractAndCheckpoints({
   endDate,
   deadline,
   resourceUrls = [],
+  isDraft = false,
 }) {
   console.log("👉 skills nhận được:", skills);
   console.log("checkpont", checkpoints);
@@ -39,64 +41,95 @@ async function createJobWithContractAndCheckpoints({
   try {
     await client.query("BEGIN");
 
-    // 1️⃣ Lock budget (budget + fee)
-    const walletService = require("../wallets/wallet.service");
-    await walletService.lockBudget(client, {
-       userId: clientId,
-       amount: totalLockAmount || budget,
-       referenceId: 0, // We will update this after job is created? Or use a placeholder.
-       referenceType: 'JOB_CREATION'
-    });
+    // 1️⃣ Lock budget
+    if (!isDraft) {
+      const walletService = require("../wallets/wallet.service");
+      await walletService.lockBudget(client, {
+         userId: clientId,
+         amount: totalLockAmount || budget,
+         referenceId: 0, // We will update this after job is created? Or use a placeholder.
+         referenceType: 'JOB_CREATION'
+      });
+    }
+
+    const initialStatus = isDraft ? 'DRAFT' : 'PENDING';
 
 
     // 1.5 Moderate job content
     const moderationService = require('../../services/moderation.service');
-    const moderationText = `${title}\n${description || ''}`;
+    const skillNames = Array.isArray(skills) ? skills.map(s => typeof s === 'object' ? s?.name : '').filter(Boolean).join(' ') : '';
+    const moderationText = `${title}\n${description || ''}\n${categoryName || ''}\n${skillNames}`;
     const moderationResult = await moderationService.moderateContent(moderationText);
     const moderationStatus = moderationService.getModerationStatus(moderationResult.approved);
+
+    let finalCategoryId = categoryId;
+    if (!finalCategoryId && categoryName) {
+        const slugStr = categoryName.toLowerCase().replace(/\s+/g, '-');
+        const resCat = await client.query('INSERT INTO job_categories (name, slug, is_active, created_at) VALUES ($1, $2, false, NOW()) RETURNING id', [categoryName, slugStr]);
+        finalCategoryId = resCat.rows[0].id;
+    }
 
     // 2️⃣ Tạo job
     const { rows: jobRows } = await client.query(
       `
       INSERT INTO jobs (
-        client_id, category_id, title, description,
-        job_type, budget, status, moderation_status, moderation_result, created_at,
-        deadline, resource_urls
+        client_id, category_id, title, description, job_type, budget, status, moderation_status, moderation_result, deadline, resource_urls, start_date, end_date, created_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, NOW(), $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
       RETURNING *
       `,
-      [clientId, categoryId, title, description || null, jobType, budget, moderationStatus, JSON.stringify(moderationResult), deadline || null, JSON.stringify(resourceUrls)],
+      [clientId, finalCategoryId, title, description || null, jobType, budget, initialStatus, moderationStatus, JSON.stringify(moderationResult), deadline || null, JSON.stringify(resourceUrls), startDate || null, endDate || null],
     );
 
     const job = jobRows[0];
 
-    // 2️⃣.5️⃣ GÁN SKILLS (BẠN ĐANG THIẾU)
+    // 2️⃣.5️⃣ GÁN SKILLS
     if (Array.isArray(skills)) {
-      for (const skillId of skills) {
-        if (!skillId) continue; // Skip null/undefined skills
-        await client.query(
-          `
-          INSERT INTO job_skills (job_id, skill_id, created_at)
-          VALUES ($1, $2, NOW())
-          ON CONFLICT DO NOTHING
-          `,
-          [job.id, skillId],
-        );
+      for (const sk of skills) {
+        if (!sk) continue;
+        
+        let skillId = null;
+        if (typeof sk === 'object' && sk !== null) {
+            skillId = sk.id;
+            if (!skillId && sk.name) {
+                const slugStr = sk.name.toLowerCase().replace(/\s+/g, '-');
+                const resSk = await client.query('INSERT INTO skills (name, slug, is_active, created_at) VALUES ($1, $2, false, NOW()) RETURNING id', [sk.name, slugStr]);
+                skillId = resSk.rows[0].id;
+            }
+        } else if (typeof sk === 'number' || typeof sk === 'string') {
+            skillId = Number(sk); // Fallback for old payloads
+        }
+
+        if (skillId && !isNaN(skillId)) {
+          await client.query(
+            `
+            INSERT INTO job_skills (job_id, skill_id, created_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT DO NOTHING
+            `,
+            [job.id, skillId],
+          );
+        }
       }
     }
 
     // 3️⃣ Tạo contract
+    // Tính toán duration_days nếu startDate và endDate tồn tại
+    let durationDays = null;
+    if (startDate && endDate) {
+      durationDays = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24));
+    }
+
     const { rows: contractRows } = await client.query(
       `
       INSERT INTO contracts (
         job_id, client_id, contract_type,
-        total_amount, contract_content, status, created_at
+        total_amount, contract_content, job_details, duration_days, status, created_at
       )
-      VALUES ($1, $2, 'ESCROW', $3, $4, 'DRAFT', NOW())
+      VALUES ($1, $2, 'ESCROW', $3, $4, $5, $6, 'DRAFT', NOW())
       RETURNING *
       `,
-      [job.id, clientId, budget, contractContent],
+      [job.id, clientId, budget, contractContent, description, durationDays],
     );
 
     const contract = contractRows[0];
@@ -108,12 +141,12 @@ async function createJobWithContractAndCheckpoints({
         `
         INSERT INTO checkpoints (
           contract_id, title, description,
-          amount, due_date, duration_days, rework_limit, status, created_at
+          amount, due_date, duration_days, rework_limit, status, resource_urls, created_at
         )
-        VALUES ($1, $2, $3, $4, null, $5, 3, 'PENDING', NOW())
+        VALUES ($1, $2, $3, $4, null, $5, 3, 'PENDING', $6, NOW())
         RETURNING *
         `,
-        [contract.id, cp.title, cp.description || null, cp.amount, cp.duration_days || 7],
+        [contract.id, cp.title, cp.description || null, cp.amount, cp.duration_days || 7, JSON.stringify(cp.resourceUrls || [])],
       );
       createdCheckpoints.push(rows[0]);
     }

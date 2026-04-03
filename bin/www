@@ -76,14 +76,16 @@ io.on('connection', (socket) => {
     console.log(`User ${socket.user.id} joined dispute ${disputeId}`);
   });
 
-  socket.on('send_message', async (data) => {
-    // data: { conversationId, content }
+    socket.on('send_message', async (data) => {
+    // data: { conversationId, content, imageUrl }
     try {
-      const { conversationId, content } = data;
+      const { conversationId, content, imageUrl } = data;
+      console.log('socket event send_message RECEIVED payload:', data);
+      require('fs').appendFileSync('socket_debug.log', JSON.stringify(data) + '\n');
       const senderId = socket.user.id;
 
       // Save to DB
-      const message = await chatService.saveMessage(conversationId, senderId, content);
+      const message = await chatService.saveMessage(conversationId, senderId, content, imageUrl);
 
       // Emit to room
       io.to(`conversation_${conversationId}`).emit('receive_message', message);

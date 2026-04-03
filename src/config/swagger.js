@@ -12,14 +12,14 @@ const options = {
       },
     },
     servers: [
-      {
-        url: '/',
-        description: 'Main server (Relative path)',
-      },
-      {
-        url: 'http://localhost:5000',
-        description: 'Local development server',
-      },
+        {
+            url: 'https://fafbe-production.up.railway.app',
+            description: 'Railway Production Server'
+        },
+        {
+            url: 'http://localhost:5000',
+            description: 'Local development server',
+        },
     ],
     components: {
       securitySchemes: {

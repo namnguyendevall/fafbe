@@ -30,6 +30,15 @@ router.get('/categories/proposals', auth, isManagerOrAdmin, controller.listCateg
 router.put('/categories/proposals/:id/approve', auth, isAdmin, controller.approveCategoryProposal);
 router.put('/categories/proposals/:id/reject', auth, isAdmin, controller.rejectCategoryProposal);
 
+// Inactive Custom Entites
+router.get('/categories/inactive', auth, isManagerOrAdmin, controller.listInactiveCategories);
+router.put('/categories/inactive/:id/approve', auth, isAdmin, controller.approveInactiveCategory);
+router.put('/categories/inactive/:id/reject', auth, isAdmin, controller.rejectInactiveCategory);
+
+router.get('/skills/inactive', auth, isManagerOrAdmin, controller.listInactiveSkills);
+router.put('/skills/inactive/:id/approve', auth, isAdmin, controller.approveInactiveSkill);
+router.put('/skills/inactive/:id/reject', auth, isAdmin, controller.rejectInactiveSkill);
+
 // Admin Notifications
 router.get('/notifications', auth, isAdmin, controller.listAdminNotifications);
 router.patch('/notifications/:id/read', auth, isAdmin, controller.markNotificationRead);

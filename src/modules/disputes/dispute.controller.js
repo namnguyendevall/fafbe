@@ -130,7 +130,7 @@ exports.addMessage = async (req, res) => {
             if (!dispute) return res.status(403).json({ message: "Unauthorized. You are not a participant in this dispute." });
         }
 
-        // Handle file uploads
+        // Handle file uploads (Cloudinary files bypass)
         let attachmentUrls = [];
         if (req.files && req.files.length > 0) {
             const uploadPromises = req.files.map(file => uploadToCloudinary(file.buffer));
@@ -147,7 +147,7 @@ exports.addMessage = async (req, res) => {
            }
         }
 
-        const result = await s.addMessage({ disputeId: id, userId: req.user.id, message, attachments: finalAttachments });
+        const result = await s.addMessage({ disputeId: id, userId: req.user.id, message, attachments: finalAttachments, imageUrl: req.body.image_url });
         
         // Emit real-time event to everyone viewing the dispute
         const io = req.app.get('io');

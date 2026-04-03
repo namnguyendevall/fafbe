@@ -31,8 +31,8 @@ module.exports = {
   `,
 
   addMessage: `
-    INSERT INTO dispute_messages (dispute_id, sender_id, message, attachments, created_at)
-    VALUES ($1, $2, $3, $4, NOW())
+    INSERT INTO dispute_messages (dispute_id, sender_id, message, attachments, image_url, created_at)
+    VALUES ($1, $2, $3, $4, $5, NOW())
     RETURNING *
   `,
   getMessages: `

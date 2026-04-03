@@ -10,8 +10,7 @@ const config = {
     secretKey: process.env.MOMO_SECRET_KEY?.replace(/"/g, '').trim(),
     endpoint: process.env.MOMO_ENDPOINT?.replace(/"/g, '').trim(),
     redirectUrl: process.env.MOMO_REDIRECT_URL?.replace(/"/g, '').trim(),
-    ipnUrl: process.env.MOMO_IPN_URL?.replace(/"/g, '').trim(),
-    exchangeRate: parseInt(process.env.POINT_EXCHANGE_RATE || "1000", 10)
+    ipnUrl: process.env.MOMO_IPN_URL?.replace(/"/g, '').trim()
 };
 
 exports.depositMomo = async (req, res) => {
@@ -25,12 +24,12 @@ exports.depositMomo = async (req, res) => {
 
         // FAF Points to VND Conversion
         // MoMo requires minimum 1000 VND
-        // Default rate: 1 CRED = 1000 VND (unless otherwise set in env)
-        const exchangeRate = parseInt(process.env.POINT_EXCHANGE_RATE || "1000", 10);
+        // Default rate: 1 CRED = 1 VND
+        const exchangeRate = parseInt(process.env.POINT_EXCHANGE_RATE || "1", 10);
         const amountVnd = Math.floor(amount * exchangeRate);
         
         if (amountVnd < 1000) {
-            return res.status(400).json({ message: "Số CRED tối thiểu là 1 CRED (tương đương 1,000 VND) để nạp qua MoMo." });
+            return res.status(400).json({ message: "Số CRED nạp tối thiểu là 1,000 CRED (tương đương 1,000 VND để đạt chuẩn giao dịch MoMo)." });
         }
         const orderInfo = `Nap tien vao vi FAF (${amount} CRED)`;
         const orderId = `deposit_${userId}_${Date.now()}`;
@@ -110,7 +109,8 @@ exports.momoIpn = async (req, res) => {
 
                 const parts = orderId.split('_');
                 const userId = parts[1].trim();
-                const pointsToAdd = Math.floor(amount / config.exchangeRate);
+                const exchangeRate = parseInt(process.env.POINT_EXCHANGE_RATE || "1", 10);
+                const pointsToAdd = Math.floor(amount / exchangeRate);
                 const sTransId = transId.toString();
 
                 console.log(`[MOMO IPN] Processing: UserID="${userId}", Points=${pointsToAdd}, TransId=${sTransId}`);

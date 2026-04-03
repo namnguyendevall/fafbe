@@ -46,8 +46,8 @@ exports.getMessages = async (conversationId, userId) => {
     return rows;
 };
 
-exports.saveMessage = async (conversationId, senderId, content) => {
-    const { rows } = await pool.query(sql.addMessage, [conversationId, senderId, content]);
+exports.saveMessage = async (conversationId, senderId, content, imageUrl) => {
+    const { rows } = await pool.query(sql.addMessage, [conversationId, senderId, content || '', imageUrl || null]);
     return rows[0];
 };
 

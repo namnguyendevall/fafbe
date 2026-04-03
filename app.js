@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config(); // Updated exchange rate to 1:1
 const dns = require('dns');
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');

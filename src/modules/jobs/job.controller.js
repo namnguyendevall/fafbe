@@ -20,8 +20,8 @@ function validateCreateJobPayload(body) {
     errors.push("title is required");
   }
 
-  if (!categoryId || !Number.isInteger(Number(categoryId))) {
-    errors.push("categoryId is required and must be a number");
+  if ((!categoryId || !Number.isInteger(Number(categoryId))) && !body.categoryName) {
+    errors.push("categoryId is required and must be a number, or categoryName must be provided");
   }
 
   if (!jobType) {
@@ -76,6 +76,16 @@ function validateCreateJobPayload(body) {
         const start = new Date(body.startDate);
         if (end <= start) {
             errors.push("endDate must be after startDate");
+        } else {
+            // Validate Checkpoint Duration
+            const jobDurationDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+            if (Array.isArray(checkpoints)) {
+                let totalCPDays = 0;
+                checkpoints.forEach(cp => totalCPDays += (Number(cp.duration_days) || 0));
+                if (totalCPDays > jobDurationDays) {
+                    errors.push(`Tổng thời gian các checkpoint (${totalCPDays} ngày) không được vượt quá thời lượng công việc (${jobDurationDays} ngày)`);
+                }
+            }
         }
     }
   }
@@ -137,10 +147,12 @@ async function createJob(req, res) {
       checkpoints,
       contractContent,
       categoryId,
+      categoryName,
       skills,
       startDate,
       endDate,
       resourceUrls,
+      isDraft,
     } = req.body;
 
     // ✅ 2. Validate payload
@@ -152,12 +164,14 @@ async function createJob(req, res) {
       });
     }
 
-    // ✅ 3. Validate category tồn tại & active
-    const category = await getCategoryById(Number(categoryId));
-    if (!category || !category.is_active) {
-      return res.status(400).json({
-        message: "Invalid or inactive category",
-      });
+    // ✅ 3. Validate category tồn tại & active (nếu không phải custom category)
+    if (!categoryName) {
+      const category = await getCategoryById(Number(categoryId));
+      if (!category || !category.is_active) {
+        return res.status(400).json({
+          message: "Invalid or inactive category",
+        });
+      }
     }
 
     const budgetNum = Number(budget);
@@ -165,7 +179,9 @@ async function createJob(req, res) {
     const platformFeeAmount = Math.round(
       (budgetNum * PLATFORM_FEE_PERCENT) / 100,
     );
-    const totalLockAmount = budgetNum + platformFeeAmount;
+    // User requested total job budget to NOT include external fee. 
+    // Employer pays exactly budgetNum. Fee is deducted from worker payout.
+    const totalLockAmount = budgetNum;
 
     // ✅ 4. Create job + contract + checkpoints
     const {
@@ -186,12 +202,15 @@ async function createJob(req, res) {
         description: cp.description,
         amount: Number(cp.amount),
         duration_days: Number(cp.duration_days) || 7,
+        resourceUrls: cp.resourceUrls || [],
       })),
       contractContent,
-      categoryId: Number(categoryId),
+      categoryId: (!categoryId || categoryId === 'other' || categoryId === -1) ? null : Number(categoryId),
+      categoryName,
       skills,
       deadline: req.body.deadline,
       resourceUrls: resourceUrls || [],
+      isDraft: !!isDraft,
     });
 
     // Notify Admins
@@ -226,8 +245,8 @@ async function createJob(req, res) {
           platformFeePercent: PLATFORM_FEE_PERCENT,
           platformFeeAmount,
           totalEscrow: budgetNum,
-          clientPays: budgetNum + platformFeeAmount,
-          workerEarns: budgetNum,
+          clientPays: budgetNum,
+          workerEarns: budgetNum - platformFeeAmount,
         },
       },
     });

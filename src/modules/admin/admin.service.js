@@ -112,3 +112,29 @@ exports.markNotificationRead = async (id) => {
     await pool.query(sql.markNotificationRead, [id]);
 };
 
+exports.getInactiveCategories = async () => {
+    const { rows } = await pool.query("SELECT * FROM job_categories WHERE is_active = false");
+    return rows;
+};
+
+exports.approveInactiveCategory = async (id) => {
+    await pool.query("UPDATE job_categories SET is_active = true WHERE id = $1", [id]);
+};
+
+exports.rejectInactiveCategory = async (id) => {
+    await pool.query("UPDATE job_categories SET is_active = null WHERE id = $1", [id]);
+};
+
+exports.getInactiveSkills = async () => {
+    const { rows } = await pool.query("SELECT * FROM skills WHERE is_active = false");
+    return rows;
+};
+
+exports.approveInactiveSkill = async (id) => {
+    await pool.query("UPDATE skills SET is_active = true WHERE id = $1", [id]);
+};
+
+exports.rejectInactiveSkill = async (id) => {
+    await pool.query("UPDATE skills SET is_active = null WHERE id = $1", [id]);
+};
+

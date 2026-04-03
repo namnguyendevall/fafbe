@@ -11,7 +11,7 @@ const config = {
     endpoint: process.env.ZALOPAY_ENDPOINT?.replace(/"/g, '').trim() || 'https://sb-openapi.zalopay.vn/v2/create',
     callback_url: process.env.ZALOPAY_CALLBACK_URL?.replace(/"/g, '').trim(),
     redirect_url: process.env.ZALOPAY_REDIRECT_URL?.replace(/"/g, '').trim(),
-    exchangeRate: parseInt(process.env.POINT_EXCHANGE_RATE || '1000', 10)
+    redirect_url: process.env.ZALOPAY_REDIRECT_URL?.replace(/"/g, '').trim()
 };
 
 console.log('[ZALOPAY CONFIG] APP_ID:', config.app_id);
@@ -34,10 +34,11 @@ exports.depositZaloPay = async (req, res) => {
             return res.status(400).json({ message: 'Invalid amount' });
         }
 
-        const amountVnd = Math.floor(amount * config.exchangeRate);
+        const exchangeRate = parseInt(process.env.POINT_EXCHANGE_RATE || '1', 10);
+        const amountVnd = Math.floor(amount * exchangeRate);
 
         if (amountVnd < 1000) {
-            return res.status(400).json({ message: 'Số CRED tối thiểu là 1 CRED (tương đương 1,000 VND).' });
+            return res.status(400).json({ message: 'Số CRED nạp tối thiểu là 1,000 CRED (tương đương 1,000 VND để đạt chuẩn giao dịch thẻ).' });
         }
 
         const transID = Math.floor(Math.random() * 1000000);
@@ -117,7 +118,8 @@ exports.zalopayCallback = async (req, res) => {
 
             const userId = dataJson.app_user.replace('user_', '').trim();
             const amountVnd = dataJson.amount;
-            const pointsToAdd = Math.floor(amountVnd / config.exchangeRate);
+            const exchangeRate = parseInt(process.env.POINT_EXCHANGE_RATE || '1', 10);
+            const pointsToAdd = Math.floor(amountVnd / exchangeRate);
             const appTransId = dataJson.app_trans_id; // Use our internal ID as reference
             const zpTransId = dataJson.zp_trans_id.toString();
 

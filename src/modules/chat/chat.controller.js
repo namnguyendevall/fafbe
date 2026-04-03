@@ -40,10 +40,10 @@ exports.startChat = async (req, res) => {
 exports.sendMessage = async (req, res) => {
     try {
         const { id } = req.params;
-        const { content } = req.body;
-        if (!content) return res.status(400).json({ message: "Content required" });
+        const { content, image_url } = req.body;
+        if (!content && !image_url) return res.status(400).json({ message: "Content or Image required" });
         
-        const message = await s.saveMessage(id, req.user.id, content);
+        const message = await s.saveMessage(id, req.user.id, content, image_url);
         
         // Notify via socket if io is available
         const io = req.app.get('io');

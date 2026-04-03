@@ -49,8 +49,8 @@ module.exports = {
   `,
 
   addMessage: `
-    INSERT INTO messages (conversation_id, sender_id, content, created_at)
-    VALUES ($1, $2, $3, NOW())
+    INSERT INTO messages (conversation_id, sender_id, content, image_url, created_at)
+    VALUES ($1, $2, $3, $4, NOW())
     RETURNING *
   `,
 

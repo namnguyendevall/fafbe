@@ -7,14 +7,19 @@ const mailer = require('../../config/mail');
 const generateOtp = () =>
   Math.floor(100000 + Math.random() * 900000).toString();
 
-exports.register = async (email, password, role) => {
+exports.register = async (email, password, role, fullName) => {
   console.log(`>>> [register] Starting for ${email}`);
   
   // Check if email already exists
   const { rows: existingUser } = await pool.query(sql.findUserByEmail, [email]);
   if (existingUser.length > 0) {
-    console.log(`[register] FAILED: Email ${email} already registered`);
-    throw new Error('Email already registered');
+    if (existingUser[0].status === 'PENDING') {
+      console.log(`[register] Email ${email} has PENDING status, removing old records to allow re-registration.`);
+      await pool.query('DELETE FROM users WHERE email = $1 AND status = $2', [email, 'PENDING']);
+    } else {
+      console.log(`[register] FAILED: Email ${email} already registered and active`);
+      throw new Error('Email already registered');
+    }
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -26,7 +31,16 @@ exports.register = async (email, password, role) => {
       hashedPassword,
       role
     ]);
-    console.log(`[register] User record inserted:`, userRes.rows[0]?.id);
+    const newlyCreatedUser = userRes.rows[0];
+    console.log(`[register] User record inserted:`, newlyCreatedUser?.id);
+
+    // Bổ sung lưu fullName báo từ payload đăng ký
+    if (fullName) {
+      await pool.query(
+        'INSERT INTO user_profiles (user_id, full_name) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name', 
+        [newlyCreatedUser.id, fullName]
+      );
+    }
 
     const otp = generateOtp();
     const otpHash = await bcrypt.hash(otp, 10);
