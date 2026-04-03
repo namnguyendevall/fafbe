@@ -8,6 +8,11 @@ module.exports = {
   getById: `
     SELECT d.*, 
            u.email as raiser_email,
+           j.title as job_title,
+           j.description as job_description,
+           j.resource_urls as job_resource_urls,
+           c.contract_content as contract_content,
+           c.total_amount as contract_total_amount,
            cp.title as checkpoint_title,
            cp.amount as checkpoint_amount,
            cp.rework_count as checkpoint_rework_count,
@@ -17,6 +22,7 @@ module.exports = {
     FROM disputes d
     JOIN users u ON u.id = d.raised_by
     JOIN contracts c ON c.id = d.contract_id
+    JOIN jobs j ON j.id = c.job_id
     JOIN users uc ON uc.id = c.client_id
     JOIN users uw ON uw.id = c.worker_id
     LEFT JOIN checkpoints cp ON cp.id = d.checkpoint_id
