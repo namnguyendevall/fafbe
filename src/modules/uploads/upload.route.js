@@ -46,6 +46,11 @@ router.post('/submission', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Không có file' });
 
     try {
+        const ext = path.extname(req.file.originalname).toLowerCase();
+        if (ext === '.zip' || ext === '.rar' || ext === '.7z') {
+            return res.status(400).json({ message: 'Hệ thống không hỗ trợ file nén (.zip, .rar, .7z). Vui lòng tải lên từng file lẻ.' });
+        }
+
         let resultUrl;
         let resultSize = req.file.size;
         let resultName = req.file.originalname;
