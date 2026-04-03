@@ -17,12 +17,18 @@ if (process.env.CLOUDINARY_URL) {
     cloudinary.config(); 
 }
 
-const uploadToCloudinary = (buffer, folder = 'faf_submissions') => {
+const uploadToCloudinary = (buffer, originalName, folder = 'faf_submissions') => {
     return new Promise((resolve, reject) => {
+        // Extract name without extension for public_id, or just use use_filename
+        const fileNameWithoutExt = path.parse(originalName).name;
+        
         const stream = cloudinary.uploader.upload_stream(
             {
                 folder: folder,
-                resource_type: "auto"
+                resource_type: "auto",
+                use_filename: true,
+                unique_filename: true,
+                filename_override: originalName
             },
             (error, result) => {
                 if (error) return reject(error);
@@ -43,7 +49,7 @@ router.post('/submission', upload.single('file'), async (req, res) => {
         
         if (process.env.CLOUDINARY_URL) {
             console.log(`[upload/submission] Attempting Cloudinary upload...`);
-            url = await uploadToCloudinary(req.file.buffer);
+            url = await uploadToCloudinary(req.file.buffer, req.file.originalname);
             console.log(`[upload/submission] Cloudinary upload success: ${url}`);
         } else {
             console.log(`[upload/submission] Falling back to local storage...`);
