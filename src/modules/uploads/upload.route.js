@@ -104,33 +104,46 @@ router.get('/download', async (req, res) => {
 
     try {
         let fetchUrl = url;
-        const axiosOptions = {
-            method: 'get',
-            responseType: 'stream',
-            timeout: 30000
-        };
-
-        // If it's a Cloudinary URL, use Owner credentials to fetch
+        
+        // If it's a Cloudinary URL, generate a SIGNED version to bypass 401
         if (url.includes('cloudinary.com')) {
-            const config = cloudinary.config();
-            if (config.api_key && config.api_secret) {
-                // Use Basic Auth for Owner-level access
-                const auth = Buffer.from(`${config.api_key}:${config.api_secret}`).toString('base64');
-                axiosOptions.headers = {
-                    'Authorization': `Basic ${auth}`
-                };
-                console.log(`[upload/download] Fetching with Owner credentials: ${url}`);
-            } else {
-                console.warn("[upload/download] Cloudinary credentials missing in config");
+            try {
+                // Extract public_id and version correctly
+                // URL: .../upload/v1234567/path/to/file.zip
+                const parts = url.split('/');
+                const uploadIndex = parts.indexOf('upload');
+                
+                if (uploadIndex !== -1 && parts.length > uploadIndex + 2) {
+                    const versionStr = parts[uploadIndex + 1]; // e.g. v1775219117
+                    const version = versionStr.startsWith('v') ? versionStr.substring(1) : versionStr;
+                    const publicIdWithExt = parts.slice(uploadIndex + 2).join('/');
+                    
+                    // Generate signed URL using SDK
+                    fetchUrl = cloudinary.url(publicIdWithExt, {
+                        resource_type: 'raw',
+                        type: 'upload',
+                        version: version,
+                        sign_url: true,
+                        secure: true
+                    });
+                    
+                    console.log(`[upload/download] Sign Success. Version: ${version}, ID: ${publicIdWithExt}`);
+                }
+            } catch (signErr) {
+                console.error("[upload/download] Signing logic error:", signErr.message);
             }
         }
 
+        console.log(`[upload/download] Fetching final URL: ${fetchUrl}`);
+
         const response = await axios({
-            ...axiosOptions,
-            url: fetchUrl
+            method: 'get',
+            url: fetchUrl,
+            responseType: 'stream',
+            timeout: 30000
         });
 
-        console.log(`[upload/download] Successfully connected to source. Status: ${response.status}`);
+        console.log(`[upload/download] Connected. Status: ${response.status}`);
 
         // Forward content type from Cloudinary
         res.setHeader('Content-Type', response.headers['content-type'] || 'application/octet-stream');
