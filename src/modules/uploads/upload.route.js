@@ -29,7 +29,8 @@ const uploadToCloudinary = (buffer, originalName, folder = 'faf_submissions') =>
                 resource_type: "auto",
                 use_filename: true,
                 unique_filename: true,
-                filename_override: originalName
+                filename_override: originalName,
+                access_mode: "public"
             },
             (error, result) => {
                 if (error) return reject(error);
@@ -102,9 +103,34 @@ router.get('/download', async (req, res) => {
     console.log(`[upload/download] Proxying: ${url}, name: ${name}`);
 
     try {
+        let fetchUrl = url;
+
+        // If it's a Cloudinary URL, generate a SIGNED version to bypass 401
+        if (url.includes('cloudinary.com')) {
+            try {
+                // Extract public_id from URL (e.g. faf_submissions/filename.zip)
+                // Cloudinary URL usually: .../upload/v1234567/folder/id.ext
+                const parts = url.split('/');
+                const uploadIndex = parts.indexOf('upload');
+                if (uploadIndex !== -1 && parts.length > uploadIndex + 2) {
+                    // Public ID is the part after the version (vXXXXXX)
+                    const publicIdWithExt = parts.slice(uploadIndex + 2).join('/');
+                    // Use SDK to generate a signed delivery URL
+                    fetchUrl = cloudinary.url(publicIdWithExt, {
+                        resource_type: 'raw',
+                        sign_url: true,
+                        secure: true
+                    });
+                    console.log(`[upload/download] Signed URL generated: ${fetchUrl}`);
+                }
+            } catch (signErr) {
+                console.warn("[upload/download] URL Signing failed, using raw url:", signErr.message);
+            }
+        }
+
         const response = await axios({
             method: 'get',
-            url: url,
+            url: fetchUrl,
             responseType: 'stream',
             timeout: 30000 // 30s timeout
         });
