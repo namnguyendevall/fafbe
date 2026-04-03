@@ -2,6 +2,8 @@ module.exports = {
   getById: `
     SELECT c.*, 
            j.title as job_title,
+           j.description as job_description,
+           j.resource_urls as job_resource_urls,
            j.start_date as job_start_date,
            j.end_date as job_end_date,
            client.full_name as client_name,
@@ -9,7 +11,7 @@ module.exports = {
            (SELECT id FROM disputes WHERE contract_id = c.id AND status = 'OPEN' ORDER BY created_at DESC LIMIT 1) as dispute_id
     FROM contracts c
     JOIN jobs j ON j.id = c.job_id
-    LEFT JOIN user_profiles client ON client.user_id = c.client_id
+    LEFT JOIN user_profiles client ON client.user_id = j.client_id
     LEFT JOIN user_profiles worker ON worker.user_id = c.worker_id
     WHERE c.id = $1
   `,
@@ -39,13 +41,14 @@ module.exports = {
     SELECT c.*, 
            j.title as job_title,
            j.description as job_description,
+           j.resource_urls as job_resource_urls,
            j.start_date as job_start_date,
            client.full_name as client_name,
            worker.full_name as worker_name,
            (SELECT id FROM disputes WHERE contract_id = c.id AND status = 'OPEN' ORDER BY created_at DESC LIMIT 1) as dispute_id
     FROM contracts c
     JOIN jobs j ON j.id = c.job_id
-    LEFT JOIN user_profiles client ON client.user_id = c.client_id
+    LEFT JOIN user_profiles client ON client.user_id = j.client_id
     LEFT JOIN user_profiles worker ON worker.user_id = c.worker_id
     WHERE c.worker_id = $1 
       AND c.status NOT IN ('COMPLETED', 'CANCELLED', 'TERMINATED')
@@ -63,6 +66,7 @@ module.exports = {
     SELECT c.*, 
            j.title as job_title,
            j.description as job_description,
+           j.resource_urls,
            j.start_date as job_start_date,
            client.full_name as client_name,
            worker.full_name as worker_name,
@@ -86,6 +90,7 @@ module.exports = {
     SELECT c.*, 
            j.title as job_title,
            j.description as job_description,
+           j.resource_urls,
            j.start_date as job_start_date,
            j.end_date as job_end_date,
            client.full_name as client_name,

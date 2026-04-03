@@ -137,11 +137,18 @@ exports.acceptProposal = async (proposalId, clientId) => {
     // No further lock/deduction needed here.
 
 
-    // 6. Auto-Cleanup: Delete other pending proposals by this worker (Exclusive Work Policy)
+    // 6. Auto-Cleanup: Delete other pending proposals by THIS worker (Exclusive Work Policy)
     await client.query(`
         DELETE FROM proposals 
         WHERE worker_id = $1 AND status = 'PENDING' AND id != $2
     `, [proposal.worker_id, proposal.id]);
+
+    // 6.1 Auto-Reject ALL other workers for THIS job
+    await client.query(`
+        UPDATE proposals 
+        SET status = 'REJECTED', updated_at = NOW()
+        WHERE job_id = $1 AND id != $2 AND status = 'PENDING'
+    `, [proposal.job_id, proposal.id]);
 
     // 7. Update Job Status to PENDING_SIGNATURE
     await client.query("UPDATE jobs SET status = 'PENDING_SIGNATURE', updated_at = NOW() WHERE id = $1", [proposal.job_id]);
