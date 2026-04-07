@@ -136,17 +136,31 @@ async function createJobWithContractAndCheckpoints({
 
     // 4️⃣ Checkpoints
     const createdCheckpoints = [];
+    let currentDueDate = startDate ? new Date(startDate) : new Date();
+
     for (const cp of checkpoints) {
+      const days = parseInt(cp.duration_days) || 7;
+      // Sequential Calculation: Next deadline = Previous deadline + current duration
+      currentDueDate = new Date(currentDueDate.getTime() + days * 24 * 60 * 60 * 1000);
+
       const { rows } = await client.query(
         `
         INSERT INTO checkpoints (
           contract_id, title, description,
           amount, due_date, duration_days, rework_limit, status, resource_urls, created_at
         )
-        VALUES ($1, $2, $3, $4, null, $5, 3, 'PENDING', $6, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, 3, 'PENDING', $7, NOW())
         RETURNING *
         `,
-        [contract.id, cp.title, cp.description || null, cp.amount, cp.duration_days || 7, JSON.stringify(cp.resourceUrls || [])],
+        [
+          contract.id, 
+          cp.title, 
+          cp.description || null, 
+          cp.amount, 
+          currentDueDate, 
+          days, 
+          JSON.stringify(cp.resourceUrls || [])
+        ],
       );
       createdCheckpoints.push(rows[0]);
     }
@@ -258,6 +272,7 @@ async function getJobById(jobId, requestingUser = null) {
                 'amount', cp.amount,
                 'status', cp.status,
                 'deadline', cp.due_date,
+                'duration_days', cp.duration_days,
                 'submission_url', cp.submission_url,
                 'submission_notes', cp.submission_notes
               ) ORDER BY cp.created_at ASC
