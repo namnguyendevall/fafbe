@@ -176,7 +176,76 @@ async function createJobWithContractAndCheckpoints({
   }
 }
 
+async function handleCheckpointOverdue(client, checkpointId) {
+  try {
+    const cpRes = await client.query(
+      `SELECT cp.*, c.worker_id, c.client_id, j.id as job_id 
+       FROM checkpoints cp 
+       JOIN contracts c ON cp.contract_id = c.id 
+       JOIN jobs j ON c.job_id = j.id 
+       WHERE cp.id = $1`,
+      [checkpointId]
+    );
+    const cp = cpRes.rows[0];
+    if (!cp || !cp.worker_id) return;
+
+    // 1. Terminate Contract (Money stays in Jobs.total_lock_amount!)
+    await client.query("UPDATE contracts SET status = 'TERMINATED', updated_at = NOW() WHERE id = $1", [cp.contract_id]);
+    await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE contract_id = $1 AND status NOT IN ('APPROVED', 'SUBMITTED')", [cp.contract_id]);
+
+    // 2. Set Job status to EXPIRED
+    await client.query("UPDATE jobs SET status = 'EXPIRED', updated_at = NOW() WHERE id = $1", [cp.job_id]);
+
+    // 3. Create Auto-Review (1-star for all skills + calculated rating)
+    const reviewService = require("../reviews/review.service");
+    const allCpsRes = await client.query('SELECT status FROM checkpoints WHERE contract_id = $1', [cp.contract_id]);
+    const approvedCount = allCpsRes.rows.filter(r => r.status === 'APPROVED').length;
+    const totalCount = allCpsRes.rows.length;
+
+    // Calculate rating based on progress (percentage of approved checkpoints)
+    const calculatedRating = Math.max(1, Math.floor((approvedCount / totalCount) * 5));
+
+    // Get skills for the job to penalize them with 1 star
+    const skillsRes = await client.query('SELECT skill_id FROM job_skills WHERE job_id = $1', [cp.job_id]);
+    const skillRatings = skillsRes.rows.map(s => ({ skillId: s.skill_id, rating: 1 }));
+
+    await reviewService.createReview({
+      contractId: cp.contract_id,
+      reviewerId: cp.client_id,
+      rating: calculatedRating,
+      comment: `[FAF AUTO-FAIL] Worker failed to meet checkpoint deadline: "${cp.title}". Contract terminated automatically.`,
+      skillRatings: skillRatings
+    });
+
+  } catch (err) {
+    console.error("Auto-Penalty Error:", err);
+  }
+}
+
 async function listJobs({ page = 1, limit = 10, categoryId, clientId, status, workerId }) {
+  // 🕒 Bulk Lazy Expiration (Job Posting Deadline)
+  await pool.query(
+    `UPDATE jobs 
+     SET status = 'EXPIRED', updated_at = NOW()
+     WHERE status = 'OPEN' AND end_date < NOW()`
+  );
+
+  // 🕒 Overdue Checkpoint Penalty Check (Work Execution Deadline)
+  const overdueCps = await pool.query(
+    `SELECT id FROM checkpoints 
+     WHERE status = 'PENDING' AND due_date < NOW() AND contract_id IN (
+       SELECT id FROM contracts WHERE status = 'ACTIVE'
+     )`
+  );
+  for (const cp of overdueCps.rows) {
+    const client = await pool.connect();
+    try {
+      await handleCheckpointOverdue(client, cp.id);
+    } finally {
+      client.release();
+    }
+  }
+
   const offset = (page - 1) * limit;
 
   const params = [];
@@ -232,6 +301,31 @@ async function listJobs({ page = 1, limit = 10, categoryId, clientId, status, wo
  * GET JOB DETAIL
  */
 async function getJobById(jobId, requestingUser = null) {
+  // 🕒 Lazy Expiration Check
+  await pool.query(
+    `UPDATE jobs 
+     SET status = 'EXPIRED', updated_at = NOW()
+     WHERE id = $1 AND status = 'OPEN' AND end_date < NOW()`,
+    [jobId]
+  );
+
+  // 🕒 Overdue Checkpoint Penalty Check (Specific Job)
+  const overdueCps = await pool.query(
+    `SELECT id FROM checkpoints 
+     WHERE status = 'PENDING' AND due_date < NOW() AND contract_id IN (
+       SELECT id FROM contracts WHERE job_id = $1 AND status = 'ACTIVE'
+     )`,
+    [jobId]
+  );
+  for (const cp of overdueCps.rows) {
+    const client = await pool.connect();
+    try {
+      await handleCheckpointOverdue(client, cp.id);
+    } finally {
+      client.release();
+    }
+  }
+
   const { rows } = await pool.query(
     `
     SELECT j.*,
@@ -407,8 +501,8 @@ async function deleteJob(jobId, requestingUser) {
         throw new Error("UNAUTHORIZED");
     }
 
-    // 3. Status Gate (must be PENDING or OPEN or REJECTED)
-    if (!['PENDING', 'OPEN', 'REJECTED'].includes(job.status)) {
+    // 3. Status Gate (must be PENDING or OPEN or REJECTED or EXPIRED)
+    if (!['PENDING', 'OPEN', 'REJECTED', 'EXPIRED'].includes(job.status)) {
         throw new Error("CANNOT_DELETE_ACTIVE_JOB");
     }
 
@@ -433,13 +527,10 @@ async function deleteJob(jobId, requestingUser) {
       [jobId]
     );
 
-    // 6. Refund employer (If the job hasn't previously been rejected, as REJECTED already refunds)
-    if (job.status !== 'REJECTED') {
-        const budget = Number(job.budget);
-        const PLATFORM_FEE_PERCENT = 5; 
-        const fee = Math.round((budget * PLATFORM_FEE_PERCENT) / 100);
-        const refundAmount = budget + fee;
-
+    // 6. Refund employer from Job Escrow (Remaining total_lock_amount)
+    if (job.status !== 'REJECTED' && Number(job.total_lock_amount || 0) > 0) {
+        const refundAmount = Number(job.total_lock_amount);
+        
         const walletService = require("../wallets/wallet.service");
         await walletService.refundLockedFunds(client, {
             userId: job.client_id,
@@ -447,6 +538,9 @@ async function deleteJob(jobId, requestingUser) {
             referenceId: jobId,
             referenceType: 'JOB_CANCELED'
         });
+
+        // Zero out the lock amount after refund
+        await client.query("UPDATE jobs SET total_lock_amount = 0 WHERE id = $1", [jobId]);
     }
 
     await client.query('COMMIT');
@@ -566,6 +660,17 @@ async function reviewJob(jobId, { status, adminComment, adminId }) {
   }
 }
 
+async function renewJob(jobId, { endDate, clientId }) {
+  const { rows } = await pool.query(
+    `UPDATE jobs 
+     SET status = 'OPEN', end_date = $1, updated_at = NOW()
+     WHERE id = $2 AND client_id = $3 AND (status = 'EXPIRED' OR status = 'OPEN')
+     RETURNING *`,
+    [endDate, jobId, clientId]
+  );
+  return rows[0];
+}
+
 module.exports = {
   createJobWithContractAndCheckpoints,
   listJobs,
@@ -574,5 +679,6 @@ module.exports = {
   deleteJob,
   listPendingJobs,
   reviewJob,
+  renewJob,
 };
 

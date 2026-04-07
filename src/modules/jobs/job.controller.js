@@ -2,7 +2,8 @@ const { createJobWithContractAndCheckpoints, getJobById,
   listJobs,
   updateJob,
   reviewJob,
-  deleteJob, } = require("./job.service");
+  deleteJob,
+  renewJob } = require("./job.service");
 const userService = require("../users/user.service");
 const { getCategoryById } = require("../category/cate.service");
 
@@ -452,6 +453,34 @@ async function deleteJobHandler(req, res) {
   }
 }
 
+async function renewJobHandler(req, res) {
+  try {
+    const jobId = Number(req.params.id);
+    const { endDate } = req.body;
+
+    if (!endDate) {
+        return res.status(400).json({ message: "New end date is required" });
+    }
+
+    const job = await renewJob(jobId, {
+      endDate: new Date(endDate),
+      clientId: req.user.id
+    });
+
+    if (!job) {
+      return res.status(404).json({ message: "Job not found or not eligible for renewal" });
+    }
+
+    return res.json({
+      message: "Job renewed successfully",
+      data: job
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+}
+
 module.exports = {
   createJob,
   getJob,
@@ -461,6 +490,5 @@ module.exports = {
   deleteJobHandler,
   getAdminPendingJobs,
   reviewJobHandler,
+  renewJobHandler,
 };
-
-

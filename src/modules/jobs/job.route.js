@@ -3,7 +3,9 @@ const express = require('express');
 const router = express.Router();
 
 const authMiddleware = require('../../middlewares/auth.middleware'); // chỉnh đúng path file
-const { createJob, getListJobs, getJob, getMyJobs, updateJobHandler, deleteJobHandler, getAdminPendingJobs, reviewJobHandler } = require('./job.controller');
+const { createJob, getListJobs, getJob, getMyJobs, updateJobHandler, deleteJobHandler, getAdminPendingJobs, reviewJobHandler, renewJobHandler } = require('./job.controller');
+
+router.patch('/:id/renew', authMiddleware, renewJobHandler);
 
 
 /**

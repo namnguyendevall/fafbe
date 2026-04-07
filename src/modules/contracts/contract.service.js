@@ -110,15 +110,22 @@ exports.signContract = async ({ contractId, userId }) => {
             );
             updatedContract = finalRes.rows[0];
 
-            // Calculate Checkpoint due_dates dynamically based on duration_days
+            // Calculate Checkpoint due_dates: Only first CP gets a deadline at signing
             const cpsRes = await client.query('SELECT id, duration_days FROM checkpoints WHERE contract_id = $1 ORDER BY id ASC', [contractId]);
-            let cumulativeDays = 0;
-            for (const cp of cpsRes.rows) {
-                cumulativeDays += (cp.duration_days || 7);
-                await client.query(
-                    `UPDATE checkpoints SET due_date = NOW() + interval '${cumulativeDays} days' WHERE id = $1`,
-                    [cp.id]
-                );
+            for (let i = 0; i < cpsRes.rows.length; i++) {
+                const cp = cpsRes.rows[i];
+                if (i === 0) {
+                    const days = cp.duration_days || 7;
+                    await client.query(
+                        `UPDATE checkpoints SET due_date = NOW() + interval '${days} days' WHERE id = $1`,
+                        [cp.id]
+                    );
+                } else {
+                    await client.query(
+                        `UPDATE checkpoints SET due_date = null WHERE id = $1`,
+                        [cp.id]
+                    );
+                }
             }
 
             // Notify both parties via Email (Async to avoid blocking)
@@ -276,6 +283,28 @@ exports.approveCheckpoint = async ({ checkpointId, clientId, reviewNotes }) => {
             referenceId: checkpointId,
             referenceType: 'CHECKPOINT'
         });
+
+        // 3.5 Decrement jobs.total_lock_amount (Remain budget in escrow for this job)
+        await client.query(
+            `UPDATE jobs SET total_lock_amount = GREATEST(0, total_lock_amount - $1), updated_at = NOW() WHERE id = $2`,
+            [Number(cp.amount), contract.job_id]
+        );
+
+        // 4. Set next checkpoint's due_date to NOW() + duration_days
+        const nextCpRes = await client.query(
+            `SELECT id, duration_days FROM checkpoints 
+             WHERE contract_id = $1 AND status = 'PENDING' AND id > $2 
+             ORDER BY id ASC LIMIT 1`,
+            [contract.id, checkpointId]
+        );
+        if (nextCpRes.rows.length > 0) {
+            const nextCp = nextCpRes.rows[0];
+            const days = nextCp.duration_days || 7;
+            await client.query(
+                `UPDATE checkpoints SET due_date = NOW() + interval '${days} days', updated_at = NOW() WHERE id = $1`,
+                [nextCp.id]
+            );
+        }
 
         // 4. Check if all checkpoints in this contract are now APPROVED
         const allCpsRes = await client.query('SELECT status FROM checkpoints WHERE contract_id = $1', [contract.id]);
@@ -456,20 +485,10 @@ exports.terminateContract = async ({ contractId, userId }) => {
         await client.query("UPDATE contracts SET status = 'TERMINATED', updated_at = NOW() WHERE id = $1", [contractId]);
         await client.query("UPDATE checkpoints SET status = 'CANCELLED' WHERE contract_id = $1 AND status != 'APPROVED'", [contractId]);
 
-        // 4. Calculate amount to refund (all non-approved checkpoints)
-        const nonApprovedCheckpoints = checkpoints.filter(cp => cp.status !== 'APPROVED');
-        const refundAmount = nonApprovedCheckpoints.reduce((sum, cp) => sum + Number(cp.amount), 0);
-
-        // 5. Refund remaining amount to Client
-        if (refundAmount > 0) {
-            const walletService = require("../wallets/wallet.service");
-            await walletService.refundLockedFunds(client, {
-                userId: clientId,
-                amount: refundAmount,
-                referenceId: contractId,
-                referenceType: 'CONTRACT_TERMINATION'
-            });
-        }
+        // 4. Calculate amount to refund (No longer immediate)
+        // const nonApprovedCheckpoints = checkpoints.filter(cp => cp.status !== 'APPROVED');
+        // const refundAmount = nonApprovedCheckpoints.reduce((sum, cp) => sum + Number(cp.amount), 0);
+        // ... (Refund logic removed to keep money in Job)
 
         // 6. Job Re-opening: Update Job Status to OPEN
         await client.query("UPDATE jobs SET status = 'OPEN', updated_at = NOW() WHERE id = $1", [contract.job_id]);
