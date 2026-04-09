@@ -45,7 +45,7 @@ exports.requestWithdrawal = async (req, res) => {
         const description = `Rút ${amount} CRED qua ${method}`;
         
         await client.query(walletSql.createTransaction, [
-            wallet.id, 'WITHDRAW', amount, 'PENDING', 'WITHDRAWAL_REQUEST', withdrawal.id, description
+            wallet.id, 'WITHDRAW', -amount, 'PENDING', 'WITHDRAWAL_REQUEST', withdrawal.id, description
         ]);
 
         await client.query('COMMIT');
